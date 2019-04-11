@@ -231,7 +231,8 @@ bool CollisionChecker::interpolatePath(
 auto CollisionChecker::getCollisionModelVisualization(const RobotState& state)
     -> std::vector<smpl::visual::Marker>
 {
-    return this->visualizer(state);
+    std::cout << "CollisionChecker::getCollisionModelVisualization() called" << std::endl;
+    return this->visualizer(state); 
 }
 
 auto CollisionChecker::getExtension(size_t class_code)
