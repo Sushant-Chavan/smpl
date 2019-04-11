@@ -220,7 +220,7 @@ void ManipLattice::GetSuccs(
     SMPL_DEBUG_STREAM_NAMED(G_EXPANSIONS_LOG, "  angles: " << parent_entry->state);
 
     auto* vis_name = "expansion";
-    SV_SHOW_DEBUG_NAMED(vis_name, getStateVisualization(parent_entry->state, vis_name));
+    //SV_SHOW_DEBUG_NAMED(vis_name, getStateVisualization(parent_entry->state, vis_name));
 
     int goal_succ_count = 0;
 
@@ -312,7 +312,7 @@ void ManipLattice::GetLazySuccs(
 
     auto& source_angles = state_entry->state;
     auto* vis_name = "expansion";
-    SV_SHOW_DEBUG_NAMED(vis_name, getStateVisualization(source_angles, vis_name));
+    //SV_SHOW_DEBUG_NAMED(vis_name, getStateVisualization(source_angles, vis_name));
 
     std::vector<Action> actions;
     if (!m_actions->apply(source_angles, actions)) {
@@ -380,7 +380,7 @@ int ManipLattice::GetTrueCost(int parentID, int childID)
 
     auto& parent_angles = parent_entry->state;
     auto* vis_name = "expansion";
-    SV_SHOW_DEBUG_NAMED(vis_name, getStateVisualization(parent_angles, vis_name));
+    //SV_SHOW_DEBUG_NAMED(vis_name, getStateVisualization(parent_angles, vis_name));
 
     std::vector<Action> actions;
     if (!m_actions->apply(parent_angles, actions)) {
@@ -800,7 +800,7 @@ bool ManipLattice::setStart(const RobotState& state)
     }
 
     auto* vis_name = "start_config";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(state, vis_name));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(state, vis_name));
 
     // get arm position in environment
     auto start_coord = RobotCoord(robot()->jointVariableCount());
@@ -907,7 +907,7 @@ bool ManipLattice::extractPath(
         }
 
         auto* vis_name = "goal_config";
-        SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(opath.back(), vis_name));
+        //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(opath.back(), vis_name));
         return true;
     }
 
@@ -999,7 +999,7 @@ bool ManipLattice::extractPath(
     // we made it!
     path = std::move(opath);
     auto* vis_name = "goal_config";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
     return true;
 }
 
@@ -1087,7 +1087,7 @@ bool ManipLattice::setGoalConfiguration(const GoalConstraint& goal)
     }
 
     auto vis_name = "target_config";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(goal.angles, vis_name));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(goal.angles, vis_name));
 
     SMPL_INFO_NAMED(G_LOG, "A new goal has been set");
     SMPL_INFO_STREAM_NAMED(G_LOG, "  config: " << goal.angles);
