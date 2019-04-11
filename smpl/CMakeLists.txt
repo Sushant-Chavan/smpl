@@ -5,7 +5,7 @@ project(smpl)
 # overall build mode and features #
 ###################################
 
-set(SMPL_CONSOLE_ROS ON CACHE BOOL "Replace smpl log macros with rosconsole macros")
+#set(SMPL_CONSOLE_ROS ON CACHE BOOL "Replace smpl log macros with rosconsole macros")
 set(SMPL_SV_VISUALIZATION_MSGS ON CACHE BOOL "Include visualization_msgs in visualizer interface")
 
 # Seed options using the default behavior of BUILD_SHARED_LIBS
@@ -308,4 +308,3 @@ install(
         "${PROJECT_BINARY_DIR}/smpl-config-version.cmake"
     DESTINATION ${SMPL_INSTALL_CMAKE_DIR}
     COMPONENT dev)
-
