@@ -262,7 +262,13 @@ auto MakeJointDistEGraphHeuristic(
     };
 
     auto h = make_unique<JointDistEGraphHeuristic>();
-    if (!h->init(space, &h->jd)) {
+    if (!h->jd.init(space))
+    {
+        return nullptr;
+    }
+
+    if (!h->init(space, &h->jd))
+    {
         return nullptr;
     }
 
