@@ -27,6 +27,9 @@
 #include <smpl/heuristic/bfs_heuristic.h>
 #include <smpl/robot_model.h>
 #include <smpl/search/arastar.h>
+#include <smpl/search/experience_graph_planner.h>
+#include <smpl/heuristic/generic_egraph_heuristic.h>
+#include <smpl/graph/manip_lattice_egraph.h>
 #include <smpl/stl/memory.h>
 
 namespace smpl {
@@ -250,6 +253,25 @@ enum struct ConcreteSpaceType
     MORSE_STATE_SPACE_TYPE,
 };
 
+auto MakeJointDistEGraphHeuristic(
+    RobotPlanningSpace* space)
+    -> std::unique_ptr<RobotHeuristic>
+{
+    struct JointDistEGraphHeuristic : public GenericEgraphHeuristic {
+        JointDistHeuristic jd;
+    };
+
+    auto h = make_unique<JointDistEGraphHeuristic>();
+    if (!h->init(space, &h->jd)) {
+        return nullptr;
+    }
+
+    double egw = 1.0;
+    // params.param("egraph_epsilon", egw, 1.0);
+    h->setWeightEGraph(egw);
+    return std::move(h);
+};
+
 struct PlannerImpl
 {
     // world model interface
@@ -258,14 +280,14 @@ struct PlannerImpl
 
     // graph
     std::string mprim_filename;
-    smpl::ManipLattice space;
+    smpl::ManipLatticeEgraph space;
     smpl::ManipLatticeActionSpace actions;
 
     // heuristic
     std::unique_ptr<smpl::RobotHeuristic> heuristic;
 
     // search
-    std::unique_ptr<smpl::ARAStar> search;
+    std::unique_ptr<smpl::ExperienceGraphPlanner> search;
 
     OccupancyGrid* grid = NULL;
 
@@ -516,22 +538,26 @@ PlannerImpl::PlannerImpl(
     //////////////////////////
 
     if (planner_id.empty()) {
-        this->heuristic = make_unique<JointDistHeuristic>();
-        if (!this->heuristic->init(&this->space)) {
-            return;
-        }
-    } else if (planner_id == "arastar.joint_dist.manip") {
-        this->heuristic = make_unique<JointDistHeuristic>();
-        if (!this->heuristic->init(&this->space)) {
-            return;
-        }
-    } else if (planner_id == "arastar.bfs.manip") {
-        auto bfs_heuristic = make_unique<BfsHeuristic>();
-        if (!bfs_heuristic->init(&this->space, grid)) {
-            return;
-        }
-        this->heuristic = std::move(bfs_heuristic);
-    } else {
+        this->heuristic = MakeJointDistEGraphHeuristic(&this->space);
+        // this->heuristic = make_unique<JointDistHeuristic>();
+        // if (!this->heuristic->init(&this->space)) {
+        //     return;
+        // }
+
+    } 
+    // else if (planner_id == "arastar.joint_dist.manip") {
+    //     this->heuristic = make_unique<JointDistHeuristic>();
+    //     if (!this->heuristic->init(&this->space)) {
+    //         return;
+    //     }
+    // } else if (planner_id == "arastar.bfs.manip") {
+    //     auto bfs_heuristic = make_unique<BfsHeuristic>();
+    //     if (!bfs_heuristic->init(&this->space, grid)) {
+    //         return;
+    //     }
+    //     this->heuristic = std::move(bfs_heuristic);
+    // } 
+    else {
         SMPL_ERROR("Unrecognized planner name");
         return;
     }
@@ -540,7 +566,7 @@ PlannerImpl::PlannerImpl(
     // Initialize the Search //
     ///////////////////////////
 
-    this->search = make_unique<ARAStar>(&this->space, this->heuristic.get());
+    this->search = make_unique<ExperienceGraphPlanner>(&this->space, this->heuristic.get());
 
     ////////////////////////
     // Declare Parameters //
@@ -658,41 +684,41 @@ PlannerImpl::PlannerImpl(
         planner->params().declareParam<bool>("search_mode", set, get);
     }
 
-    {
-        auto set = [&](bool val) { this->search->allowPartialSolutions(val); };
-        auto get = [&]() { return this->search->allowPartialSolutions(); };
-        planner->params().declareParam<bool>("allow_partial_solutions", set, get);
-    }
+    // {
+    //     auto set = [&](bool val) { this->search->allowPartialSolutions(val); };
+    //     auto get = [&]() { return this->search->allowPartialSolutions(); };
+    //     planner->params().declareParam<bool>("allow_partial_solutions", set, get);
+    // }
 
-    {
-        auto set = [&](double val) { this->search->setTargetEpsilon(val); };
-        auto get = [&]() { return this->search->targetEpsilon(); };
-        planner->params().declareParam<double>("target_epsilon", set, get);
-    }
+    // {
+    //     auto set = [&](double val) { this->search->setTargetEpsilon(val); };
+    //     auto get = [&]() { return this->search->targetEpsilon(); };
+    //     planner->params().declareParam<double>("target_epsilon", set, get);
+    // }
 
-    {
-        auto set = [&](double val) { this->search->setDeltaEpsilon(val); };
-        auto get = [&]() { return this->search->deltaEpsilon(); };
-        planner->params().declareParam<double>("delta_epsilon", set, get);
-    }
+    // {
+    //     auto set = [&](double val) { this->search->setDeltaEpsilon(val); };
+    //     auto get = [&]() { return this->search->deltaEpsilon(); };
+    //     planner->params().declareParam<double>("delta_epsilon", set, get);
+    // }
 
-    {
-        auto set = [&](bool val) { this->search->setImproveSolution(val); };
-        auto get = [&]() { return this->search->improveSolution(); };
-        planner->params().declareParam<double>("improve_solution", set, get);
-    }
+    // {
+    //     auto set = [&](bool val) { this->search->setImproveSolution(val); };
+    //     auto get = [&]() { return this->search->improveSolution(); };
+    //     planner->params().declareParam<double>("improve_solution", set, get);
+    // }
 
-    {
-        auto set = [&](bool val) { this->search->setBoundExpansions(val); };
-        auto get = [&]() { return this->search->boundExpansions(); };
-        planner->params().declareParam<bool>("bound_expansions", set, get);
-    }
+    // {
+    //     auto set = [&](bool val) { this->search->setBoundExpansions(val); };
+    //     auto get = [&]() { return this->search->boundExpansions(); };
+    //     planner->params().declareParam<bool>("bound_expansions", set, get);
+    // }
 
-    {
-        auto set = [&](double val) { this->search->setAllowedRepairTime(val); };
-        auto get = [&]() { return this->search->allowedRepairTime(); };
-        planner->params().declareParam<double>("repair_time", set, get);
-    }
+    // {
+    //     auto set = [&](double val) { this->search->setAllowedRepairTime(val); };
+    //     auto get = [&]() { return this->search->allowedRepairTime(); };
+    //     planner->params().declareParam<double>("repair_time", set, get);
+    // }
 
     this->initialized = true;
 }
@@ -847,11 +873,11 @@ auto PlannerImpl::solve(
     // and allow the state of the search to persist between calls
     this->search->force_planning_from_scratch();
 
-    smpl::ARAStar::TimeParameters time_params;
-    time_params.bounded = this->search->boundExpansions();
-    time_params.improve = this->search->improveSolution();
-    time_params.type = smpl::ARAStar::TimeParameters::USER;
-    time_params.timed_out_fun = [&]() { return ptc.eval(); };
+    // smpl::ARAStar::TimeParameters time_params;
+    // time_params.bounded = this->search->boundExpansions();
+    // time_params.improve = this->search->improveSolution();
+    // time_params.type = smpl::ARAStar::TimeParameters::USER;
+    // time_params.timed_out_fun = [&]() { return ptc.eval(); };
 
     auto start_id = space.getStartStateID();
     auto goal_id = space.getGoalStateID();
@@ -860,7 +886,7 @@ auto PlannerImpl::solve(
 
     std::vector<int> solution;
     int cost;
-    auto res = this->search->replan(time_params, &solution, &cost);
+    auto res = this->search->replan(5.0, &solution, &cost);
 
     if (!res) {
         SMPL_WARN("Failed to find solution");
@@ -1067,4 +1093,3 @@ auto MakeStateOMPL(
 }
 
 } // namespace smpl
-
