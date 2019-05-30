@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
 
     ss.setPlanner(planner);
 
-    auto solved = ss.solve(5.0);
+    auto solved = ss.solve(30.0);
 
     if (solved) {
         std::cout << "Found solution:" << std::endl;
