@@ -46,6 +46,7 @@ Logger* GetLogger(const std::string& name)
         }
 
         lit->second.parent = parent;
+        // lit->second.level = LEVEL_DEBUG;
         lit->second.level = parent->level;
     }
 

@@ -174,6 +174,10 @@ void ManipLattice::PrintState(int stateID, bool verbose, FILE* fout)
             break;
         }
         ss << " }>";
+
+        RobotCoord coord(robot()->jointVariableCount());
+        stateToCoord(goal().angles, coord);
+        ss << " coord: " <<coord << " ";
     } else {
         ss << "{ ";
         for (size_t i = 0; i < entry->state.size(); ++i) {

@@ -460,7 +460,7 @@ PlannerImpl::PlannerImpl(
     // Initialize Manip Lattice //
     //////////////////////////////
 
-    auto res = 0.05;
+    auto res = 0.02;
 
     std::vector<double> resolutions;
     resolutions.resize(this->model.getPlanningJoints().size(), res);
@@ -483,7 +483,8 @@ PlannerImpl::PlannerImpl(
         return;
     }
 
-    for (int i = 0; i < (int)this->model.getPlanningJoints().size(); ++i) {
+    // -1 since we are currently ignoring the actions that produce the change in theta
+    for (int i = 0; i < (int)this->model.getPlanningJoints().size()-1; ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
         mprim[i] = res;
         this->actions.addMotionPrim(mprim, false);
@@ -816,7 +817,10 @@ auto PlannerImpl::solve(
             // UGH
             goal_condition.angle_tolerances.resize(
                     goal_condition.angles.size(),
-                    0.5 * this->space.resolutions().front());
+                    this->space.resolutions().front());
+            // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
+            int last  = goal_condition.angle_tolerances.size() - 1;
+            goal_condition.angle_tolerances[last] = 7;
             break;
         }
         default:
@@ -857,6 +861,7 @@ auto PlannerImpl::solve(
     this->search->set_start(start_id);
     this->search->set_goal(goal_id);
 
+    // this->space.PrintState(goal_id, true);
     std::vector<int> solution;
     int cost;
     auto res = this->search->replan(time_params, &solution, &cost);
@@ -1066,4 +1071,3 @@ auto MakeStateOMPL(
 }
 
 } // namespace smpl
-
