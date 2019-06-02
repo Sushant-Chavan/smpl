@@ -81,7 +81,7 @@ bool ManipLatticeEgraph::extractPath(
         }
 
         auto* vis_name = "goal_config";
-        SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
+        //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
         return true;
     }
 
@@ -222,7 +222,7 @@ bool ManipLatticeEgraph::extractPath(
     // we made it!
     path = std::move(opath);
     auto* vis_name = "goal_config";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
     return true;
 }
 
@@ -327,8 +327,8 @@ bool ManipLatticeEgraph::shortcut(
 
     SMPL_INFO_STREAM("Shortcut " << first_entry->state << " -> " << second_entry->state);
     auto* vis_name = "shortcut";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "shortcut_from"));
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "shortcut_to"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "shortcut_from"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "shortcut_to"));
 
     SMPL_INFO("  Shortcut %d -> %d!", first_id, second_id);
     cost = 1000;
@@ -349,8 +349,8 @@ bool ManipLatticeEgraph::snap(
 
     SMPL_INFO_STREAM("Snap " << first_entry->state << " -> " << second_entry->state);
     auto* vis_name = "snap";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "snap_from"));
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "snap_to"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "snap_from"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "snap_to"));
 
     if (!collisionChecker()->isStateToStateValid(
             first_entry->state, second_entry->state))

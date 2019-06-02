@@ -1,0 +1,157 @@
+
+Hi Sushant,
+
+It sounds like you're on the right track with how the E-Graph framework is
+setup. Answers to your questions below.
+
+1a. Correct, the ompl interface is there. It's received less attention than the
+other parts of smpl (such as the MoveIt interface), but it is functional.
+
+1bi. ExperienceGraphPlanner is one way to go. You can also use ARA*
+effectively, with a little work. The difference is that ExperienceGraphPlanner
+calls the shortcut() and snap() functions within ExperienceGraphExtension,
+rather than the graph being responsible for including those actions as part of
+GetSuccs(). I actually prefer to do it the latter way, since ARA* is a more
+thorough implementation.
+
+1bii. GenericEgraphHeuristic works fine. You need to supply an underlying
+heuristic to use with it--JointDistHeuristic is fine if you wish to use the
+c-space L2-norm as your heuristic. In your case, for SE(2), the Dijkstra-based
+E-Graph heuristic isn't a bad option either, since it will help incorporate
+obstacle information into the heuristic function. You may run into a couple
+technical issues, since it was originally built for 3D, but it can be used for
+2D with some effort.
+
+1biii. ManipLattice (and its E-Graph extension ManipLatticeEgraph) is the right
+thing to use. The name suggests that it is for manipulation, but it is actually
+the generic c-space lattice, most similar to CompoundStateSpace from ompl.
+What's manipulation-specific is the ManipLatticeActionSpace (I believe this is
+also in the ompl interface at the moment), which uses forward and inverse
+kinematics to create dynamic motion primitives. These actions can be disabled,
+but you may wish to construct your own action space to replace
+ManipLatticeActionSpace, especially if your domain has special constraints,
+like non-holonomic constraints.
+
+2a. Mentioned this briefly in 1bii, JointDistHeuristic may be sufficient,
+especially if the experience paths are informative. If the environment is
+changing dramatically or the experiences otherwise become less informative, you
+may want to look into the dijkstra/egraph heuristic to incorporate obstacle
+information. The dijkstra/egraph heuristic can also be more efficient. The
+heuristic values are determined relative to the 2D/3D workspace and stored in a
+grid for lookup, whereas the generic heuristic must loop over all of the states
+in the experience graph for every heuristic lookup.
+
+2b. Covered in 1biii, ManipLattice should be sufficient, with some tweaking to
+the action space.
+
+Hopefully that helps clarify a few things. Let me know how it goes.
+
+Andrew
+
+
+On Fri, Apr 19, 2019 at 3:40 AM Sushant Vijay Chavan <sushant.chavan@smail.inf.h-brs.de> wrote:
+
+
+    Hello Mr. Dornbush,
+    I did a code walk-through of the E-Graphs framework which is a part of 
+    your planning library SMPL, and have a few questions which relate to 
+    the specific use-case of our work. It would be very kind of you if you 
+    could provide some guidance regarding the same.
+
+    I would like to first establish the context of our work. Our project 
+    deals with path planning for multiple mobile robots. Since the number 
+    of robots in a multi-robot team could be large, it could beneficial if 
+    we use the experiences of previously computed paths when planning 
+    similar paths in future. Hence, our interest in experience based 
+    planners. We are using OMPL based planners to compute the paths since 
+    the OMPL library provides ready support for two experience based 
+    planning frameworks: Lightning and Thunder. A summary of our setup is 
+    as follows:
+            1. We plan paths in an occupancy grid map (such as 
+    https://github.com/FedericoPecora/coordination_oru/blob/master/images/coord-rsp.png) which can be provided as an image to the 
+    framework.
+            2. Multiple homogeneous robots are initialized at predefined 
+    positions in the map and have to move to predefined goal positions.
+            3. For each robot, we individually plan a path between its start and 
+    goal (ignoring other robots) using an OMPL based planner.
+            4. The robots then start moving to their respective goals and their 
+    paths are coordinated using the framework developed by Federico Pecora 
+    et. al. (https://github.com/FedericoPecora/coordination_oru), in order 
+    to avoid robot-robot collisions.
+
+    In order to integrate E-Graphs into our framework, we have a few 
+    requirements. I have listed them below along with our comments and the 
+    steps we intend to follow. We request your feedback regarding the same.
+            1. An OMPL interface to E-Graphs, such that we can use our existing 
+    setup while still being able to replace the underlying OMPL planner 
+    with the E-Graphs planner.
+                    a. I believe this is already implemented in the smpl_ompl_interface package.
+                    b. I plan to make the following changes in the PlannerImpl structure 
+    available in the ompl_interface.cpp:
+                            i. The search ARAstar --> ExperienceGraphPlanner.
+                            ii. The heuristic JointDistHeuristic --> GenericEgraphHeuristic.
+                            iii. The planning space ManipLattice --> (Not sure which one for 
+    SE2 workspace).
+            2. Ability to plan paths of a mobile robot in a 2D workspace 
+    described using an occupancy map consisting of x, y and theta.
+                    a. I believe we need to use the GenericEgraphHeuristic, but I am not 
+    sure which base heuristic should be used with the 
+    GenericEgraphHeuristic for planning in a SE2 workspace.
+                    b. I noticed that the E-Graph workspace's available in the 
+    repository are designed for manipulator planning. Does this mean that 
+    we need to implement a new workspace for path planning? It would be 
+    great if you could provide some guidelines for the same or share some 
+    code that you may already have.
+
+    Thanks and regards,
+    Sushant Chavan
+
+
+    Quoting Andrew Dornbush <andrew.dornbush@gmail.com>:
+
+    > Hi Sushant,
+    >
+    > I granted you access to the redmine server here. The packages on this
+    > server are pretty old and lacking documentation, but you may find something
+    > useful in them. The "E-Graphs" and "E-Graph Environments" packages should
+    > be public now, but you'll still need to upload an SSH key and clone via ssh
+    > to retrieve them.
+    >
+    > Alternatively, my planning library at https://github.com/aurone/smpl has
+    > another implementation of E-Graphs that is more up-to-date. Documentation
+    > is also quite lacking, but there are some tests you can look at for an
+    > overall idea of how the framework is setup. Let me know if you have any
+    > questions with this package.
+    >
+    > Andrew
+    >
+    >
+    > On Thu, Mar 7, 2019 at 6:17 AM Sushant Vijay Chavan <
+    > sushant.chavan@smail.inf.h-brs.de> wrote:
+    >
+    >>
+    >> Hello Dr. Phillips,
+    >> I am Sushant Chavan, a student at the Hochschule Bonn-Rhein-Sieg,
+    >> Germany and currently pursuing for masters in Autonomous Systems.
+    >>
+    >> As a part of the course, I need to complete a project in Research and
+    >> Development. I have chosen the topic of "Comparative analysis of
+    >> Experience based Path Planning Frameworks for Multi-Robot Systems"
+    >> under the guidance of Prof. Dr. Erwin Prassler and Argentina Ortega
+    >> Sainz (Research Associate). During my literature survey, I discovered
+    >> your work on Experience graphs. I found it quite interesting and
+    >> therefore wanted to shortlist it as one of the candidates for the
+    >> comparative evaluation.
+    >>
+    >> When searching for the implementation of the framework, I found the
+    >> link http://sbpl.net/Software which required a user account creation
+    >> to access the code and documentation of E-Graphs. I have requested for
+    >> creation of an account, but it seems like it has not been approved
+    >> yet. I am not sure if accounts are created for people outside the CMU.
+    >> Therefore, I request your help in getting access to the code and
+    >> documentation of E-Graphs.
+    >>
+    >> Best Regards,
+    >> Sushant Chavan
+    >>
+    >>
