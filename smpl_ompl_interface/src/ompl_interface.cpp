@@ -21,13 +21,17 @@
 #include <smpl/console/console.h>
 #include <smpl/console/nonstd.h>
 #include <smpl/debug/visualize.h>
-#include <smpl/graph/manip_lattice.h>
+#include <smpl/graph/manip_lattice_egraph.h>
+#include <smpl/search/experience_graph_planner.h>
+#include <smpl/heuristic/generic_egraph_heuristic.h>
 #include <smpl/graph/manip_lattice_action_space.h>
 #include <smpl/heuristic/joint_dist_heuristic.h>
 #include <smpl/heuristic/bfs_heuristic.h>
 #include <smpl/robot_model.h>
 #include <smpl/search/arastar.h>
 #include <smpl/stl/memory.h>
+
+#define USE_EGRAPH_PLANNER
 
 namespace smpl {
 namespace detail {
@@ -54,6 +58,10 @@ CallOnDestruct<Callable> MakeCallOnDestruct(Callable c) {
 // create an obscurely named CallOnDestruct with an anonymous lambda that
 // executes the given statement sequence
 #define DEFER(fun) auto MAKE_LINE_IDENT(tmp_call_on_destruct_) = ::smpl::detail::MakeCallOnDestruct([&](){ fun; })
+
+#ifdef USE_EGRAPH_PLANNER
+std::string egraph_path = "/home/suvich15/Sushant/MAS/RnD_Resources/repositories/coordination_oru/generated/experienceDBs/BRSU_Floor0/10_TrainingExperiences/UsingHotspots/Holonomic/EGraph";
+#endif
 
 ///////////////////////////////
 // RobotModel Implementation //
@@ -249,6 +257,33 @@ enum struct ConcreteSpaceType
     MORSE_STATE_SPACE_TYPE,
 };
 
+#ifdef USE_EGRAPH_PLANNER
+auto MakeJointDistEGraphHeuristic(
+    RobotPlanningSpace* space)
+    -> std::unique_ptr<RobotHeuristic>
+{
+    struct JointDistEGraphHeuristic : public GenericEgraphHeuristic {
+        JointDistHeuristic jd;
+    };
+
+    auto h = make_unique<JointDistEGraphHeuristic>();
+    if (!h->jd.init(space))
+    {
+        return nullptr;
+    }
+
+    if (!h->init(space, &h->jd))
+    {
+        return nullptr;
+    }
+
+    double egw = 1.0;
+    // params.param("egraph_epsilon", egw, 1.0);
+    h->setWeightEGraph(egw);
+    return std::move(h);
+};
+#endif
+
 struct PlannerImpl
 {
     // world model interface
@@ -257,14 +292,19 @@ struct PlannerImpl
 
     // graph
     std::string mprim_filename;
-    smpl::ManipLattice space;
     smpl::ManipLatticeActionSpace actions;
 
     // heuristic
     std::unique_ptr<smpl::RobotHeuristic> heuristic;
 
     // search
-    std::unique_ptr<smpl::ARAStar> search;
+    #ifdef USE_EGRAPH_PLANNER
+        std::unique_ptr<smpl::ExperienceGraphPlanner> search;
+        smpl::ManipLatticeEgraph space;
+    #else
+        std::unique_ptr<smpl::ARAStar> search;
+        smpl::ManipLatticeEgraph space;
+    #endif
 
     OccupancyGrid* grid = NULL;
 
@@ -474,6 +514,12 @@ PlannerImpl::PlannerImpl(
         return;
     }
 
+    #ifdef USE_EGRAPH_PLANNER
+        SMPL_INFO(">>>>>>>>>>>>>>>>>>>>>> Loading EGraph...");
+        this->space.loadExperienceGraph(egraph_path);
+        SMPL_INFO(">>>>>>>>>>>>>>>>>>>>>> Loading EGraph Complete");
+    #endif
+
     if (grid != NULL) {
         this->space.setVisualizationFrameId(grid->getReferenceFrame());
     }
@@ -515,6 +561,9 @@ PlannerImpl::PlannerImpl(
     // Initialize Heuristic //
     //////////////////////////
 
+#ifdef USE_EGRAPH_PLANNER
+    this->heuristic = MakeJointDistEGraphHeuristic(&this->space);
+#else
     if (planner_id.empty()) {
         this->heuristic = make_unique<JointDistHeuristic>();
         if (!this->heuristic->init(&this->space)) {
@@ -535,12 +584,17 @@ PlannerImpl::PlannerImpl(
         SMPL_ERROR("Unrecognized planner name");
         return;
     }
+#endif
 
     ///////////////////////////
     // Initialize the Search //
     ///////////////////////////
 
+    #ifdef USE_EGRAPH_PLANNER
+    this->search = make_unique<ExperienceGraphPlanner>(&this->space, this->heuristic.get());
+    #else
     this->search = make_unique<ARAStar>(&this->space, this->heuristic.get());
+    #endif
 
     ////////////////////////
     // Declare Parameters //
@@ -658,6 +712,7 @@ PlannerImpl::PlannerImpl(
         planner->params().declareParam<bool>("search_mode", set, get);
     }
 
+#ifndef USE_EGRAPH_PLANNER
     {
         auto set = [&](bool val) { this->search->allowPartialSolutions(val); };
         auto get = [&]() { return this->search->allowPartialSolutions(); };
@@ -693,6 +748,7 @@ PlannerImpl::PlannerImpl(
         auto get = [&]() { return this->search->allowedRepairTime(); };
         planner->params().declareParam<double>("repair_time", set, get);
     }
+#endif
 
     this->initialized = true;
 }
@@ -848,13 +904,8 @@ auto PlannerImpl::solve(
 
     // TODO: hmmm, is this needed? this should probably be part of clear()
     // and allow the state of the search to persist between calls
-    this->search->force_planning_from_scratch();
+    //this->search->force_planning_from_scratch();
 
-    smpl::ARAStar::TimeParameters time_params;
-    time_params.bounded = this->search->boundExpansions();
-    time_params.improve = this->search->improveSolution();
-    time_params.type = smpl::ARAStar::TimeParameters::USER;
-    time_params.timed_out_fun = [&]() { return ptc.eval(); };
 
     auto start_id = space.getStartStateID();
     auto goal_id = space.getGoalStateID();
@@ -864,7 +915,17 @@ auto PlannerImpl::solve(
     // this->space.PrintState(goal_id, true);
     std::vector<int> solution;
     int cost;
-    auto res = this->search->replan(time_params, &solution, &cost);
+
+    #ifdef USE_EGRAPH_PLANNER
+        auto res = this->search->replan(120.0, &solution, &cost);
+    #else
+        smpl::ARAStar::TimeParameters time_params;
+        time_params.bounded = this->search->boundExpansions();
+        time_params.improve = this->search->improveSolution();
+        time_params.type = smpl::ARAStar::TimeParameters::USER;
+        time_params.timed_out_fun = [&]() { return ptc.eval(); };
+        auto res = this->search->replan(time_params, &solution, &cost);
+    #endif
 
     if (!res) {
         SMPL_WARN("Failed to find solution");
@@ -902,6 +963,10 @@ auto PlannerImpl::solve(
     if (!space.extractPath(solution, path)) {
         return ompl::base::PlannerStatus::CRASH;
     }
+
+#ifdef USE_EGRAPH_PLANNER
+    space.saveExperience(egraph_path, path);
+#endif
 
     auto* p_path = new ompl::geometric::PathGeometric(planner->getSpaceInformation());
 
