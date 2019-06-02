@@ -35,6 +35,8 @@
 // standard includes
 #include <iomanip>
 #include <sstream>
+#include <iostream>
+#include <fstream>
 
 // system includes
 #include <sbpl/planners/planner.h>
@@ -46,6 +48,7 @@
 #include <smpl/debug/visualize.h>
 #include <smpl/debug/marker_utils.h>
 #include <smpl/spatial.h>
+#include <boost/filesystem.hpp>
 #include "../profiling.h"
 
 auto std::hash<smpl::ManipLatticeState>::operator()(
@@ -57,6 +60,28 @@ auto std::hash<smpl::ManipLatticeState>::operator()(
 }
 
 namespace smpl {
+
+bool ManipLattice::saveExperience(const std::string& filepath, const Action& experience)
+{
+    int nFiles = std::count_if(
+        boost::filesystem::directory_iterator(filepath),
+        boost::filesystem::directory_iterator(),
+        static_cast<bool(*)(const boost::filesystem::path&)>(boost::filesystem::is_regular_file) );
+
+    std::stringstream filename;
+    filename << "/" << (nFiles+1) << ".csv";
+    std::ofstream out(filepath + filename.str());
+    for (auto& state : experience) {
+        for (int i = 0; i < state.size(); i++)
+        {
+            if (i > 0)
+                out << ',';
+            out << state[i];
+        }
+        out << '\n';
+    }
+    out.close();
+}
 
 ManipLattice::~ManipLattice()
 {
