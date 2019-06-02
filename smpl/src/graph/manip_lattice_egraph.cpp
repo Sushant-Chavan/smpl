@@ -303,6 +303,28 @@ bool ManipLatticeEgraph::loadExperienceGraph(const std::string& path)
     return true;
 }
 
+bool ManipLatticeEgraph::saveExperience(const std::string& filepath, const Action& experience)
+{
+    int nFiles = std::count_if(
+        boost::filesystem::directory_iterator(filepath),
+        boost::filesystem::directory_iterator(),
+        static_cast<bool(*)(const boost::filesystem::path&)>(boost::filesystem::is_regular_file) );
+
+    std::stringstream filename;
+    filename << "/" << (nFiles+1) << ".csv";
+    std::ofstream out(filepath + filename.str());
+    for (auto& state : experience) {
+        for (int i = 0; i < state.size(); i++)
+        {
+            if (i > 0)
+                out << ',';
+            out << state[i];
+        }
+        out << '\n';
+    }
+    out.close();
+}
+
 void ManipLatticeEgraph::getExperienceGraphNodes(
     int state_id,
     std::vector<ExperienceGraph::node_id>& nodes)

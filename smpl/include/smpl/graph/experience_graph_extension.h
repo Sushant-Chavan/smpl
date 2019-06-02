@@ -36,6 +36,7 @@
 #include <vector>
 
 #include <smpl/extension.h>
+#include <smpl/types.h>
 #include <smpl/graph/experience_graph.h>
 
 namespace smpl {
@@ -45,6 +46,8 @@ class ExperienceGraphExtension : public virtual Extension
 public:
 
     virtual bool loadExperienceGraph(const std::string& path) = 0;
+
+    virtual bool saveExperience(const std::string& filepath, const Action& experience) {}
 
     virtual void getExperienceGraphNodes(
         int state_id,
