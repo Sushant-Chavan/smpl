@@ -23,6 +23,7 @@
 #include <smpl/debug/visualize.h>
 #include <smpl/graph/manip_lattice_egraph.h>
 #include <smpl/search/experience_graph_planner.h>
+#include <smpl/search/arastar_egraph.h>
 #include <smpl/heuristic/generic_egraph_heuristic.h>
 #include <smpl/graph/manip_lattice_action_space.h>
 #include <smpl/heuristic/joint_dist_heuristic.h>
@@ -32,6 +33,7 @@
 #include <smpl/stl/memory.h>
 
 #define USE_EGRAPH_PLANNER
+// #define SAVE_EXPERIENCES
 
 namespace smpl {
 namespace detail {
@@ -59,9 +61,7 @@ CallOnDestruct<Callable> MakeCallOnDestruct(Callable c) {
 // executes the given statement sequence
 #define DEFER(fun) auto MAKE_LINE_IDENT(tmp_call_on_destruct_) = ::smpl::detail::MakeCallOnDestruct([&](){ fun; })
 
-#ifdef USE_EGRAPH_PLANNER
 std::string egraph_path = "/home/suvich15/Sushant/MAS/RnD_Resources/repositories/coordination_oru/generated/experienceDBs/BRSU_Floor0/10_TrainingExperiences/UsingHotspots/Holonomic/EGraph";
-#endif
 
 ///////////////////////////////
 // RobotModel Implementation //
@@ -299,7 +299,7 @@ struct PlannerImpl
 
     // search
     #ifdef USE_EGRAPH_PLANNER
-        std::unique_ptr<smpl::ExperienceGraphPlanner> search;
+        std::unique_ptr<smpl::ARAStarEGraph> search;
         smpl::ManipLatticeEgraph space;
     #else
         std::unique_ptr<smpl::ARAStar> search;
@@ -500,7 +500,7 @@ PlannerImpl::PlannerImpl(
     // Initialize Manip Lattice //
     //////////////////////////////
 
-    auto res = 0.02;
+    auto res = 0.2;
 
     std::vector<double> resolutions;
     resolutions.resize(this->model.getPlanningJoints().size(), res);
@@ -515,9 +515,7 @@ PlannerImpl::PlannerImpl(
     }
 
     #ifdef USE_EGRAPH_PLANNER
-        SMPL_INFO(">>>>>>>>>>>>>>>>>>>>>> Loading EGraph...");
         this->space.loadExperienceGraph(egraph_path);
-        SMPL_INFO(">>>>>>>>>>>>>>>>>>>>>> Loading EGraph Complete");
     #endif
 
     if (grid != NULL) {
@@ -591,7 +589,7 @@ PlannerImpl::PlannerImpl(
     ///////////////////////////
 
     #ifdef USE_EGRAPH_PLANNER
-    this->search = make_unique<ExperienceGraphPlanner>(&this->space, this->heuristic.get());
+    this->search = make_unique<ARAStarEGraph>(&this->space, this->heuristic.get());
     #else
     this->search = make_unique<ARAStar>(&this->space, this->heuristic.get());
     #endif
@@ -712,7 +710,6 @@ PlannerImpl::PlannerImpl(
         planner->params().declareParam<bool>("search_mode", set, get);
     }
 
-#ifndef USE_EGRAPH_PLANNER
     {
         auto set = [&](bool val) { this->search->allowPartialSolutions(val); };
         auto get = [&]() { return this->search->allowPartialSolutions(); };
@@ -748,7 +745,6 @@ PlannerImpl::PlannerImpl(
         auto get = [&]() { return this->search->allowedRepairTime(); };
         planner->params().declareParam<double>("repair_time", set, get);
     }
-#endif
 
     this->initialized = true;
 }
@@ -916,26 +912,23 @@ auto PlannerImpl::solve(
     std::vector<int> solution;
     int cost;
 
-    #ifdef USE_EGRAPH_PLANNER
-        auto res = this->search->replan(120.0, &solution, &cost);
-    #else
-        smpl::ARAStar::TimeParameters time_params;
-        time_params.bounded = this->search->boundExpansions();
-        time_params.improve = this->search->improveSolution();
-        time_params.type = smpl::ARAStar::TimeParameters::USER;
-        time_params.timed_out_fun = [&]() { return ptc.eval(); };
-        auto res = this->search->replan(time_params, &solution, &cost);
-    #endif
+    smpl::ARAStar::TimeParameters time_params;
+    time_params.bounded = this->search->boundExpansions();
+    time_params.improve = this->search->improveSolution();
+    time_params.type = smpl::ARAStar::TimeParameters::USER;
+    time_params.timed_out_fun = [&]() { return ptc.eval(); };
+    SMPL_DEBUG("Starting replan");
+    auto res = this->search->replan(time_params, &solution, &cost);
 
     if (!res) {
         SMPL_WARN("Failed to find solution");
         return ompl::base::PlannerStatus(ompl::base::PlannerStatus::TIMEOUT);
     }
 
-    SMPL_DEBUG("Expands: %d", this->search->get_n_expands());
-    SMPL_DEBUG("Expands (Init): %d", this->search->get_n_expands_init_solution());
-    SMPL_DEBUG("Epsilon: %f", this->search->get_final_epsilon());
-    SMPL_DEBUG("Epsilon (Init): %f", this->search->get_initial_eps());
+    SMPL_INFO("Expands: %d", this->search->get_n_expands());
+    SMPL_INFO("Expands (Init): %d", this->search->get_n_expands_init_solution());
+    SMPL_INFO("Epsilon: %f", this->search->get_final_epsilon());
+    SMPL_INFO("Epsilon (Init): %f", this->search->get_initial_eps());
 
 #if 0
     // TODO: hidden ARA*-specific return codes
@@ -964,7 +957,7 @@ auto PlannerImpl::solve(
         return ompl::base::PlannerStatus::CRASH;
     }
 
-#ifdef USE_EGRAPH_PLANNER
+#ifdef SAVE_EXPERIENCES
     space.saveExperience(egraph_path, path);
 #endif
 
