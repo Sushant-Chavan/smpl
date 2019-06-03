@@ -166,7 +166,7 @@ public:
     void set_initialsolution_eps(double eps) override;
     ///@}
 
-private:
+protected:
 
     struct SearchState : public heap_element
     {
@@ -243,7 +243,7 @@ private:
         int& elapsed_expansions,
         clock::duration& elapsed_time);
 
-    void expand(SearchState* s);
+    virtual void expand(SearchState* s);
 
     void recomputeHeuristics();
     void reorderOpen();

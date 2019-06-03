@@ -81,7 +81,7 @@ bool ManipLatticeEgraph::extractPath(
         }
 
         auto* vis_name = "goal_config";
-        SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
+        //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
         return true;
     }
 
@@ -208,7 +208,7 @@ bool ManipLatticeEgraph::extractPath(
         SMPL_DEBUG_NAMED(G_LOG, "Check for snap successor");
         int cost;
         if (snap(prev_id, curr_id, cost)) {
-            SMPL_ERROR("Snap from %d to %d with cost %d", prev_id, curr_id, cost);
+            SMPL_DEBUG("Snap from %d to %d with cost %d", prev_id, curr_id, cost);
             ManipLatticeState* entry = getHashEntry(curr_id);
             assert(entry);
             opath.push_back(entry->state);
@@ -222,7 +222,7 @@ bool ManipLatticeEgraph::extractPath(
     // we made it!
     path = std::move(opath);
     auto* vis_name = "goal_config";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(path.back(), vis_name));
     return true;
 }
 
@@ -249,7 +249,7 @@ bool ManipLatticeEgraph::loadExperienceGraph(const std::string& path)
             continue;
         }
 
-        SMPL_INFO("Create hash entries for experience graph states");
+        SMPL_DEBUG("Create hash entries for experience graph states");
 
         auto& pp = egraph_states.front();  // previous robot state
         RobotCoord pdp(robot()->jointVariableCount()); // previous robot coord
@@ -303,6 +303,28 @@ bool ManipLatticeEgraph::loadExperienceGraph(const std::string& path)
     return true;
 }
 
+bool ManipLatticeEgraph::saveExperience(const std::string& filepath, const Action& experience)
+{
+    int nFiles = std::count_if(
+        boost::filesystem::directory_iterator(filepath),
+        boost::filesystem::directory_iterator(),
+        static_cast<bool(*)(const boost::filesystem::path&)>(boost::filesystem::is_regular_file) );
+
+    std::stringstream filename;
+    filename << "/" << (nFiles+1) << ".csv";
+    std::ofstream out(filepath + filename.str());
+    for (auto& state : experience) {
+        for (int i = 0; i < state.size(); i++)
+        {
+            if (i > 0)
+                out << ',';
+            out << state[i];
+        }
+        out << '\n';
+    }
+    out.close();
+}
+
 void ManipLatticeEgraph::getExperienceGraphNodes(
     int state_id,
     std::vector<ExperienceGraph::node_id>& nodes)
@@ -325,12 +347,12 @@ bool ManipLatticeEgraph::shortcut(
         return false;
     }
 
-    SMPL_INFO_STREAM("Shortcut " << first_entry->state << " -> " << second_entry->state);
+    SMPL_DEBUG_STREAM("Shortcut " << first_entry->state << " -> " << second_entry->state);
     auto* vis_name = "shortcut";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "shortcut_from"));
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "shortcut_to"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "shortcut_from"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "shortcut_to"));
 
-    SMPL_INFO("  Shortcut %d -> %d!", first_id, second_id);
+    SMPL_DEBUG("  Shortcut %d -> %d!", first_id, second_id);
     cost = 1000;
     return true;
 }
@@ -347,10 +369,10 @@ bool ManipLatticeEgraph::snap(
         return false;
     }
 
-    SMPL_INFO_STREAM("Snap " << first_entry->state << " -> " << second_entry->state);
+    SMPL_DEBUG_STREAM("Snap " << first_entry->state << " -> " << second_entry->state);
     auto* vis_name = "snap";
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "snap_from"));
-    SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "snap_to"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "snap_from"));
+    //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "snap_to"));
 
     if (!collisionChecker()->isStateToStateValid(
             first_entry->state, second_entry->state))
@@ -359,7 +381,7 @@ bool ManipLatticeEgraph::snap(
         return false;
     }
 
-    SMPL_INFO("  Snap %d -> %d!", first_id, second_id);
+    SMPL_DEBUG("  Snap %d -> %d!", first_id, second_id);
     cost = 1000;
     return true;
 }
@@ -435,7 +457,7 @@ bool ManipLatticeEgraph::findShortestExperienceGraphPath(
         min->closed = true;
 
         if (min == &search_nodes[goal_node]) {
-            SMPL_ERROR("Found shortest experience graph path");
+            SMPL_DEBUG("Found shortest experience graph path");
             ExperienceGraphSearchNode* ps = nullptr;
             for (ExperienceGraphSearchNode* s = &search_nodes[goal_node];
                 s; s = s->bp)
@@ -491,10 +513,10 @@ bool ManipLatticeEgraph::parseExperienceGraphFile(
         return false;
     }
 
-    SMPL_INFO("Parsed experience graph file");
-    SMPL_INFO("  Has Header: %s", parser.hasHeader() ? "true" : "false");
-    SMPL_INFO("  %zu records", parser.recordCount());
-    SMPL_INFO("  %zu fields", parser.fieldCount());
+    SMPL_DEBUG("Parsed experience graph file");
+    SMPL_DEBUG("  Has Header: %s", parser.hasHeader() ? "true" : "false");
+    SMPL_DEBUG("  %zu records", parser.recordCount());
+    SMPL_DEBUG("  %zu fields", parser.fieldCount());
 
     const size_t jvar_count = robot()->getPlanningJoints().size();
     if (parser.fieldCount() != jvar_count) {
@@ -519,7 +541,7 @@ bool ManipLatticeEgraph::parseExperienceGraphFile(
         egraph_states.push_back(std::move(state));
     }
 
-    SMPL_INFO("Read %zu states from experience graph file", egraph_states.size());
+    SMPL_DEBUG("Read %zu states from experience graph file", egraph_states.size());
     return true;
 }
 

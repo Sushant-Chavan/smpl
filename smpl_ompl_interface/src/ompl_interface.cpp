@@ -21,13 +21,19 @@
 #include <smpl/console/console.h>
 #include <smpl/console/nonstd.h>
 #include <smpl/debug/visualize.h>
-#include <smpl/graph/manip_lattice.h>
+#include <smpl/graph/manip_lattice_egraph.h>
+#include <smpl/search/experience_graph_planner.h>
+#include <smpl/search/arastar_egraph.h>
+#include <smpl/heuristic/generic_egraph_heuristic.h>
 #include <smpl/graph/manip_lattice_action_space.h>
 #include <smpl/heuristic/joint_dist_heuristic.h>
 #include <smpl/heuristic/bfs_heuristic.h>
 #include <smpl/robot_model.h>
 #include <smpl/search/arastar.h>
 #include <smpl/stl/memory.h>
+
+#define USE_EGRAPH_PLANNER
+// #define SAVE_EXPERIENCES
 
 namespace smpl {
 namespace detail {
@@ -54,6 +60,8 @@ CallOnDestruct<Callable> MakeCallOnDestruct(Callable c) {
 // create an obscurely named CallOnDestruct with an anonymous lambda that
 // executes the given statement sequence
 #define DEFER(fun) auto MAKE_LINE_IDENT(tmp_call_on_destruct_) = ::smpl::detail::MakeCallOnDestruct([&](){ fun; })
+
+std::string egraph_path = "/home/suvich15/Sushant/MAS/RnD_Resources/repositories/coordination_oru/generated/experienceDBs/BRSU_Floor0/10_TrainingExperiences/UsingHotspots/Holonomic/EGraph";
 
 ///////////////////////////////
 // RobotModel Implementation //
@@ -249,6 +257,33 @@ enum struct ConcreteSpaceType
     MORSE_STATE_SPACE_TYPE,
 };
 
+#ifdef USE_EGRAPH_PLANNER
+auto MakeJointDistEGraphHeuristic(
+    RobotPlanningSpace* space)
+    -> std::unique_ptr<RobotHeuristic>
+{
+    struct JointDistEGraphHeuristic : public GenericEgraphHeuristic {
+        JointDistHeuristic jd;
+    };
+
+    auto h = make_unique<JointDistEGraphHeuristic>();
+    if (!h->jd.init(space))
+    {
+        return nullptr;
+    }
+
+    if (!h->init(space, &h->jd))
+    {
+        return nullptr;
+    }
+
+    double egw = 1.0;
+    // params.param("egraph_epsilon", egw, 1.0);
+    h->setWeightEGraph(egw);
+    return std::move(h);
+};
+#endif
+
 struct PlannerImpl
 {
     // world model interface
@@ -257,14 +292,19 @@ struct PlannerImpl
 
     // graph
     std::string mprim_filename;
-    smpl::ManipLattice space;
     smpl::ManipLatticeActionSpace actions;
 
     // heuristic
     std::unique_ptr<smpl::RobotHeuristic> heuristic;
 
     // search
-    std::unique_ptr<smpl::ARAStar> search;
+    #ifdef USE_EGRAPH_PLANNER
+        std::unique_ptr<smpl::ARAStarEGraph> search;
+        smpl::ManipLatticeEgraph space;
+    #else
+        std::unique_ptr<smpl::ARAStar> search;
+        smpl::ManipLatticeEgraph space;
+    #endif
 
     OccupancyGrid* grid = NULL;
 
@@ -460,10 +500,14 @@ PlannerImpl::PlannerImpl(
     // Initialize Manip Lattice //
     //////////////////////////////
 
-    auto res = 0.02;
+    auto res = 0.2;
+    auto pi = 3.142;
+    auto angularRes = pi/2.0;
+    int lastJointIdx = this->model.getPlanningJoints().size() - 1;
 
     std::vector<double> resolutions;
     resolutions.resize(this->model.getPlanningJoints().size(), res);
+    resolutions[lastJointIdx] = angularRes;
     if (!this->space.init(
             &this->model,
             &this->checker,
@@ -474,6 +518,10 @@ PlannerImpl::PlannerImpl(
         return;
     }
 
+    #ifdef USE_EGRAPH_PLANNER
+        this->space.loadExperienceGraph(egraph_path);
+    #endif
+
     if (grid != NULL) {
         this->space.setVisualizationFrameId(grid->getReferenceFrame());
     }
@@ -483,10 +531,18 @@ PlannerImpl::PlannerImpl(
         return;
     }
 
-    // -1 since we are currently ignoring the actions that produce the change in theta
+    // Add motion primitives for the real vector space
     for (int i = 0; i < (int)this->model.getPlanningJoints().size()-1; ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
         mprim[i] = res;
+        this->actions.addMotionPrim(mprim, false);
+    }
+
+    // Add motion primitives for the SO2 space. 360 degree rotation with step size of resolution
+    int numRotations = int(pi / angularRes); // not 2.0*pi since the addMotionPrim automatically adds the converse primitive
+    for (int i = 0; i < numRotations; ++i) {
+        std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
+        mprim[lastJointIdx] = res * (i+1);
         this->actions.addMotionPrim(mprim, false);
     }
 
@@ -515,6 +571,9 @@ PlannerImpl::PlannerImpl(
     // Initialize Heuristic //
     //////////////////////////
 
+#ifdef USE_EGRAPH_PLANNER
+    this->heuristic = MakeJointDistEGraphHeuristic(&this->space);
+#else
     if (planner_id.empty()) {
         this->heuristic = make_unique<JointDistHeuristic>();
         if (!this->heuristic->init(&this->space)) {
@@ -535,12 +594,17 @@ PlannerImpl::PlannerImpl(
         SMPL_ERROR("Unrecognized planner name");
         return;
     }
+#endif
 
     ///////////////////////////
     // Initialize the Search //
     ///////////////////////////
 
+    #ifdef USE_EGRAPH_PLANNER
+    this->search = make_unique<ARAStarEGraph>(&this->space, this->heuristic.get());
+    #else
     this->search = make_unique<ARAStar>(&this->space, this->heuristic.get());
+    #endif
 
     ////////////////////////
     // Declare Parameters //
@@ -820,7 +884,7 @@ auto PlannerImpl::solve(
                     this->space.resolutions().front());
             // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
             int last  = goal_condition.angle_tolerances.size() - 1;
-            goal_condition.angle_tolerances[last] = 7;
+            goal_condition.angle_tolerances[last] = this->space.resolutions()[last];
             break;
         }
         default:
@@ -848,13 +912,8 @@ auto PlannerImpl::solve(
 
     // TODO: hmmm, is this needed? this should probably be part of clear()
     // and allow the state of the search to persist between calls
-    this->search->force_planning_from_scratch();
+    //this->search->force_planning_from_scratch();
 
-    smpl::ARAStar::TimeParameters time_params;
-    time_params.bounded = this->search->boundExpansions();
-    time_params.improve = this->search->improveSolution();
-    time_params.type = smpl::ARAStar::TimeParameters::USER;
-    time_params.timed_out_fun = [&]() { return ptc.eval(); };
 
     auto start_id = space.getStartStateID();
     auto goal_id = space.getGoalStateID();
@@ -864,6 +923,13 @@ auto PlannerImpl::solve(
     // this->space.PrintState(goal_id, true);
     std::vector<int> solution;
     int cost;
+
+    smpl::ARAStar::TimeParameters time_params;
+    time_params.bounded = this->search->boundExpansions();
+    time_params.improve = this->search->improveSolution();
+    time_params.type = smpl::ARAStar::TimeParameters::USER;
+    time_params.timed_out_fun = [&]() { return ptc.eval(); };
+    SMPL_DEBUG("Starting replan");
     auto res = this->search->replan(time_params, &solution, &cost);
 
     if (!res) {
@@ -871,10 +937,10 @@ auto PlannerImpl::solve(
         return ompl::base::PlannerStatus(ompl::base::PlannerStatus::TIMEOUT);
     }
 
-    SMPL_DEBUG("Expands: %d", this->search->get_n_expands());
-    SMPL_DEBUG("Expands (Init): %d", this->search->get_n_expands_init_solution());
-    SMPL_DEBUG("Epsilon: %f", this->search->get_final_epsilon());
-    SMPL_DEBUG("Epsilon (Init): %f", this->search->get_initial_eps());
+    SMPL_INFO("Expands: %d", this->search->get_n_expands());
+    SMPL_INFO("Expands (Init): %d", this->search->get_n_expands_init_solution());
+    SMPL_INFO("Epsilon: %f", this->search->get_final_epsilon());
+    SMPL_INFO("Epsilon (Init): %f", this->search->get_initial_eps());
 
 #if 0
     // TODO: hidden ARA*-specific return codes
@@ -902,6 +968,10 @@ auto PlannerImpl::solve(
     if (!space.extractPath(solution, path)) {
         return ompl::base::PlannerStatus::CRASH;
     }
+
+#ifdef SAVE_EXPERIENCES
+    space.saveExperience(egraph_path, path);
+#endif
 
     auto* p_path = new ompl::geometric::PathGeometric(planner->getSpaceInformation());
 

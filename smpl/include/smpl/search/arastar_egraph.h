@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2016, Andrew Dornbush
+// Copyright (c) 2019, Andrew Dornbush
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,40 +27,35 @@
 // POSSIBILITY OF SUCH DAMAGE.
 ////////////////////////////////////////////////////////////////////////////////
 
-/// \author Andrew Dornbush
+/// \author Sushant Chavan
 
-#ifndef SMPL_EXPERIENCE_GRAPH_EXTENSION_H
-#define SMPL_EXPERIENCE_GRAPH_EXTENSION_H
+#ifndef SMPL_ARASTAR_EGRAPH_H
+#define SMPL_ARASTAR_EGRAPH_H
 
-#include <string>
-#include <vector>
-
-#include <smpl/extension.h>
-#include <smpl/types.h>
-#include <smpl/graph/experience_graph.h>
+#include<smpl/search/arastar.h>
+#include <smpl/graph/robot_planning_space.h>
+#include <smpl/heuristic/robot_heuristic.h>
+#include <smpl/graph/experience_graph_extension.h>
+#include <smpl/heuristic/egraph_heuristic.h>
 
 namespace smpl {
 
-class ExperienceGraphExtension : public virtual Extension
+class ARAStarEGraph : public ARAStar
 {
 public:
 
-    virtual bool loadExperienceGraph(const std::string& path) = 0;
+    ARAStarEGraph(RobotPlanningSpace* pspace, RobotHeuristic* heur);
+    ~ARAStarEGraph();
 
-    virtual bool saveExperience(const std::string& filepath, const Action& experience) {}
+    void set_initialsolution_eps(double initialsolution_eps);
 
-    virtual void getExperienceGraphNodes(
-        int state_id,
-        std::vector<ExperienceGraph::node_id>& nodes) = 0;
+protected:
+    void expand(SearchState* s) override;
 
-    virtual bool shortcut(int first_id, int second_id, int& cost) = 0;
 
-    virtual bool snap(int first_id, int second_id, int& cost) = 0;
-
-    virtual const ExperienceGraph* getExperienceGraph() const = 0;
-    virtual ExperienceGraph* getExperienceGraph() = 0;
-
-    virtual int getStateID(ExperienceGraph::node_id n) const = 0;
+    ExperienceGraphExtension* m_ege;
+    ExperienceGraphHeuristicExtension* m_egh;
+    double m_eps;
 };
 
 } // namespace smpl

@@ -53,6 +53,8 @@ public:
     ///@{
     bool loadExperienceGraph(const std::string& path) override;
 
+    bool saveExperience(const std::string& filepath, const Action& experience) override;
+
     void getExperienceGraphNodes(
         int state_id,
         std::vector<ExperienceGraph::node_id>& nodes) override;

@@ -135,6 +135,7 @@ void GenericEgraphHeuristic::updateGoal(const GoalConstraint& goal)
     // Compute Connected Components of the Experience Graph //
     //////////////////////////////////////////////////////////
 
+    SMPL_DEBUG("\tComputing connected components");
     int comp_count = 0;
     m_component_ids.assign(eg->num_nodes(), -1);
     auto nodes = eg->nodes();
@@ -168,6 +169,7 @@ void GenericEgraphHeuristic::updateGoal(const GoalConstraint& goal)
     // Compute Shortcut Nodes //
     ////////////////////////////
 
+    SMPL_DEBUG("\tComputing shortcuts");
     m_shortcut_nodes.assign(comp_count, std::vector<ExperienceGraph::node_id>());
     std::vector<int> shortcut_heuristics(comp_count);
     for (auto nit = nodes.first; nit != nodes.second; ++nit) {
@@ -196,6 +198,8 @@ void GenericEgraphHeuristic::updateGoal(const GoalConstraint& goal)
     // Compute Heuristic Distances for Experience Graph Nodes //
     ////////////////////////////////////////////////////////////
 
+    SMPL_DEBUG("\tComputing heuristic distances");
+    SMPL_DEBUG("\t\tNum of EGraph nodes: %d", eg->num_nodes());
     m_h_nodes.assign(eg->num_nodes() + 1, HeuristicNode(Unknown));
     m_open.clear();
     m_h_nodes[0].dist = 0;

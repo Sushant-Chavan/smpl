@@ -4,3 +4,5 @@ smpl/include/smpl/config.h
 smpl_ompl_interface/build/
 
 smpl/build/
+
+\.vscode/

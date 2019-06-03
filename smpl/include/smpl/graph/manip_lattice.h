@@ -108,6 +108,8 @@ public:
     auto actionSpace() -> ActionSpace* { return m_actions; }
     auto actionSpace() const -> const ActionSpace* { return m_actions; }
 
+    bool saveExperience(const std::string& filepath, const Action& experience);
+
     auto getStartConfiguration() const -> RobotState;
 
     void setVisualizationFrameId(const std::string& frame_id);
