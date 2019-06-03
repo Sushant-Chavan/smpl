@@ -249,7 +249,7 @@ bool ManipLatticeEgraph::loadExperienceGraph(const std::string& path)
             continue;
         }
 
-        SMPL_INFO("Create hash entries for experience graph states");
+        SMPL_DEBUG("Create hash entries for experience graph states");
 
         auto& pp = egraph_states.front();  // previous robot state
         RobotCoord pdp(robot()->jointVariableCount()); // previous robot coord
@@ -513,10 +513,10 @@ bool ManipLatticeEgraph::parseExperienceGraphFile(
         return false;
     }
 
-    SMPL_INFO("Parsed experience graph file");
-    SMPL_INFO("  Has Header: %s", parser.hasHeader() ? "true" : "false");
-    SMPL_INFO("  %zu records", parser.recordCount());
-    SMPL_INFO("  %zu fields", parser.fieldCount());
+    SMPL_DEBUG("Parsed experience graph file");
+    SMPL_DEBUG("  Has Header: %s", parser.hasHeader() ? "true" : "false");
+    SMPL_DEBUG("  %zu records", parser.recordCount());
+    SMPL_DEBUG("  %zu fields", parser.fieldCount());
 
     const size_t jvar_count = robot()->getPlanningJoints().size();
     if (parser.fieldCount() != jvar_count) {
@@ -541,7 +541,7 @@ bool ManipLatticeEgraph::parseExperienceGraphFile(
         egraph_states.push_back(std::move(state));
     }
 
-    SMPL_INFO("Read %zu states from experience graph file", egraph_states.size());
+    SMPL_DEBUG("Read %zu states from experience graph file", egraph_states.size());
     return true;
 }
 
