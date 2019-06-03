@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
 
     ss.setStartAndGoalStates(start, goal);
 
-    ompl::base::PlannerPtr planner(new smpl::OMPLPlanner(ss.getSpaceInformation()));
+    ompl::base::PlannerPtr planner(new smpl::OMPLPlanner(ss.getSpaceInformation(), false));
     planner->params().setParam("epsilon", "100.0");
 
     ss.setPlanner(planner);

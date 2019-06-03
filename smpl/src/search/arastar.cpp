@@ -499,7 +499,7 @@ int ARAStar::improvePath(
         }
 
         if (timedOut(elapsed_expansions, elapsed_time)) {
-            SMPL_DEBUG_NAMED(SLOG, "Ran out of time");
+            SMPL_INFO_NAMED(SLOG, "Ran out of time");
             return TIMED_OUT;
         }
 
