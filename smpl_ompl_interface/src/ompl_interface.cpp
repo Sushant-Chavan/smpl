@@ -527,8 +527,7 @@ PlannerImpl::PlannerImpl(
         return;
     }
 
-    // -1 since we are currently ignoring the actions that produce the change in theta
-    for (int i = 0; i < (int)this->model.getPlanningJoints().size()-1; ++i) {
+    for (int i = 0; i < (int)this->model.getPlanningJoints().size(); ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
         mprim[i] = res;
         this->actions.addMotionPrim(mprim, false);
@@ -871,8 +870,8 @@ auto PlannerImpl::solve(
                     goal_condition.angles.size(),
                     this->space.resolutions().front());
             // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
-            int last  = goal_condition.angle_tolerances.size() - 1;
-            goal_condition.angle_tolerances[last] = 7;
+            // int last  = goal_condition.angle_tolerances.size() - 1;
+            // goal_condition.angle_tolerances[last] = 7;
             break;
         }
         default:
