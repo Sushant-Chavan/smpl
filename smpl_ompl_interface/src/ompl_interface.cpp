@@ -501,9 +501,13 @@ PlannerImpl::PlannerImpl(
     //////////////////////////////
 
     auto res = 0.2;
+    auto pi = 3.142;
+    auto angularRes = pi/2.0;
+    int lastJointIdx = this->model.getPlanningJoints().size() - 1;
 
     std::vector<double> resolutions;
     resolutions.resize(this->model.getPlanningJoints().size(), res);
+    resolutions[lastJointIdx] = angularRes;
     if (!this->space.init(
             &this->model,
             &this->checker,
@@ -527,9 +531,18 @@ PlannerImpl::PlannerImpl(
         return;
     }
 
-    for (int i = 0; i < (int)this->model.getPlanningJoints().size(); ++i) {
+    // Add motion primitives for the real vector space
+    for (int i = 0; i < (int)this->model.getPlanningJoints().size()-1; ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
         mprim[i] = res;
+        this->actions.addMotionPrim(mprim, false);
+    }
+
+    // Add motion primitives for the SO2 space. 360 degree rotation with step size of resolution
+    int numRotations = int(pi / angularRes); // not 2.0*pi since the addMotionPrim automatically adds the converse primitive
+    for (int i = 0; i < numRotations; ++i) {
+        std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
+        mprim[lastJointIdx] = res * (i+1);
         this->actions.addMotionPrim(mprim, false);
     }
 
@@ -870,8 +883,8 @@ auto PlannerImpl::solve(
                     goal_condition.angles.size(),
                     this->space.resolutions().front());
             // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
-            // int last  = goal_condition.angle_tolerances.size() - 1;
-            // goal_condition.angle_tolerances[last] = 7;
+            int last  = goal_condition.angle_tolerances.size() - 1;
+            goal_condition.angle_tolerances[last] = this->space.resolutions()[last];
             break;
         }
         default:
