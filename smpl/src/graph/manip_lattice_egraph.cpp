@@ -208,7 +208,7 @@ bool ManipLatticeEgraph::extractPath(
         SMPL_DEBUG_NAMED(G_LOG, "Check for snap successor");
         int cost;
         if (snap(prev_id, curr_id, cost)) {
-            SMPL_ERROR("Snap from %d to %d with cost %d", prev_id, curr_id, cost);
+            SMPL_DEBUG("Snap from %d to %d with cost %d", prev_id, curr_id, cost);
             ManipLatticeState* entry = getHashEntry(curr_id);
             assert(entry);
             opath.push_back(entry->state);
@@ -347,12 +347,12 @@ bool ManipLatticeEgraph::shortcut(
         return false;
     }
 
-    SMPL_INFO_STREAM("Shortcut " << first_entry->state << " -> " << second_entry->state);
+    SMPL_DEBUG_STREAM("Shortcut " << first_entry->state << " -> " << second_entry->state);
     auto* vis_name = "shortcut";
     //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "shortcut_from"));
     //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "shortcut_to"));
 
-    SMPL_INFO("  Shortcut %d -> %d!", first_id, second_id);
+    SMPL_DEBUG("  Shortcut %d -> %d!", first_id, second_id);
     cost = 1000;
     return true;
 }
@@ -369,7 +369,7 @@ bool ManipLatticeEgraph::snap(
         return false;
     }
 
-    SMPL_INFO_STREAM("Snap " << first_entry->state << " -> " << second_entry->state);
+    SMPL_DEBUG_STREAM("Snap " << first_entry->state << " -> " << second_entry->state);
     auto* vis_name = "snap";
     //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(first_entry->state, "snap_from"));
     //SV_SHOW_INFO_NAMED(vis_name, getStateVisualization(second_entry->state, "snap_to"));
@@ -381,7 +381,7 @@ bool ManipLatticeEgraph::snap(
         return false;
     }
 
-    SMPL_INFO("  Snap %d -> %d!", first_id, second_id);
+    SMPL_DEBUG("  Snap %d -> %d!", first_id, second_id);
     cost = 1000;
     return true;
 }
@@ -457,7 +457,7 @@ bool ManipLatticeEgraph::findShortestExperienceGraphPath(
         min->closed = true;
 
         if (min == &search_nodes[goal_node]) {
-            SMPL_ERROR("Found shortest experience graph path");
+            SMPL_DEBUG("Found shortest experience graph path");
             ExperienceGraphSearchNode* ps = nullptr;
             for (ExperienceGraphSearchNode* s = &search_nodes[goal_node];
                 s; s = s->bp)
