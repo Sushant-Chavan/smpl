@@ -64,11 +64,6 @@ ARAStarEGraph::ARAStarEGraph(
 
 ARAStarEGraph::~ARAStarEGraph()
 {
-    // for (SearchState* s : m_states) {
-    //     if (s != NULL) {
-    //         delete s;
-    //     }
-    // }
 }
 
 // Expand a state, updating its successors and placing them into OPEN, CLOSED,

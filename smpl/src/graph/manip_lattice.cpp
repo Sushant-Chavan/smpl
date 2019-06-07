@@ -140,7 +140,7 @@ bool ManipLattice::init(
         m_continuous[jidx] = _robot->isContinuous(jidx);
         m_bounded[jidx] = _robot->hasPosLimit(jidx);
 
-        SMPL_DEBUG_NAMED(G_LOG, "variable %d: { min: %f, max: %f, continuous: %s, bounded: %s }",
+        SMPL_INFO_NAMED(G_LOG, "variable %d: { min: %f, max: %f, continuous: %s, bounded: %s }",
             jidx,
             m_min_limits[jidx],
             m_max_limits[jidx],
@@ -167,8 +167,8 @@ bool ManipLattice::init(
         }
     }
 
-    SMPL_DEBUG_STREAM_NAMED(G_LOG, "  coord vals: " << discretization);
-    SMPL_DEBUG_STREAM_NAMED(G_LOG, "  coord deltas: " << deltas);
+    SMPL_INFO_STREAM_NAMED(G_LOG, "  coord vals: " << discretization);
+    SMPL_INFO_STREAM_NAMED(G_LOG, "  coord deltas: " << deltas);
 
     m_coord_vals = std::move(discretization);
     m_coord_deltas = std::move(deltas);
