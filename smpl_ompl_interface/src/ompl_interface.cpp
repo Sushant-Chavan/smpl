@@ -512,7 +512,10 @@ PlannerImpl::PlannerImpl(
     }
 
     if (b_useEGraphs) {
-        dynamic_cast<ManipLatticeEgraph*>(this->space.get())->loadExperienceGraph(this->eGraphsDir);
+        ManipLatticeEgraph* egraphLattice = dynamic_cast<ManipLatticeEgraph*>(this->space.get());
+        if (false && egraphLattice){
+            egraphLattice->loadExperienceGraph(this->eGraphsDir);
+        }
     }
 
     if (grid != NULL) {
@@ -877,8 +880,7 @@ auto PlannerImpl::solve(
                     goal_condition.angles.size(),
                     this->space->resolutions().front());
             // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
-            int last  = goal_condition.angle_tolerances.size() - 1;
-            goal_condition.angle_tolerances[last] = this->space->resolutions()[last]*2.0;
+            goal_condition.angle_tolerances.back() = this->space->resolutions().back()*2.0;
             break;
         }
         default:
