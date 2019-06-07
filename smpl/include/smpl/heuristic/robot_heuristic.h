@@ -55,7 +55,7 @@ public:
 
     virtual ~RobotHeuristic();
 
-    bool init(RobotPlanningSpace* space);
+    virtual bool init(RobotPlanningSpace* space);
 
     auto planningSpace() -> RobotPlanningSpace* { return m_space; }
     auto planningSpace() const -> const RobotPlanningSpace* { return m_space; }
