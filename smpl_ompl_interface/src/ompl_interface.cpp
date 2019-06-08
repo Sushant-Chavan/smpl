@@ -513,7 +513,7 @@ PlannerImpl::PlannerImpl(
 
     if (b_useEGraphs) {
         ManipLatticeEgraph* egraphLattice = dynamic_cast<ManipLatticeEgraph*>(this->space.get());
-        if (false && egraphLattice){
+        if (egraphLattice){
             egraphLattice->loadExperienceGraph(this->eGraphsDir);
         }
     }
@@ -530,7 +530,7 @@ PlannerImpl::PlannerImpl(
     // Add motion primitives for the real vector space
     for (int i = 0; i < (int)this->model.getPlanningJoints().size()-1; ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
-        mprim[i] = res*2.0;
+        mprim[i] = res; // in meters
         this->actions->addMotionPrim(mprim, false);
     }
 
@@ -880,7 +880,7 @@ auto PlannerImpl::solve(
                     goal_condition.angles.size(),
                     this->space->resolutions().front());
             // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
-            goal_condition.angle_tolerances.back() = this->space->resolutions().back()*2.0;
+            goal_condition.angle_tolerances.back() = this->space->resolutions().back();
             break;
         }
         default:
@@ -933,9 +933,9 @@ auto PlannerImpl::solve(
         return ompl::base::PlannerStatus(ompl::base::PlannerStatus::TIMEOUT);
     }
 
-    SMPL_INFO("Expands: %d", this->search->get_n_expands());
+    SMPL_INFO("Expands (Total): %d", this->search->get_n_expands());
     SMPL_INFO("Expands (Init): %d", this->search->get_n_expands_init_solution());
-    SMPL_INFO("Epsilon: %f", this->search->get_final_epsilon());
+    SMPL_INFO("Epsilon (Solution): %f", this->search->get_solution_eps());
     SMPL_INFO("Epsilon (Init): %f", this->search->get_initial_eps());
 
 #if 0
