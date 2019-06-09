@@ -80,6 +80,8 @@ public:
     Extension* getExtension(size_t class_code) override;
     ///@}
 
+    bool prevSolFromRecall();
+
 private:
 
     struct RobotCoordHash
@@ -114,6 +116,8 @@ private:
         std::vector<RobotState>& egraph_states) const;
 
     void rasterizeExperienceGraph();
+
+    bool m_last_sol_from_recall = false;
 };
 
 } // namespace smpl

@@ -54,6 +54,7 @@ bool ManipLatticeEgraph::extractPath(
     const std::vector<int>& idpath,
     std::vector<RobotState>& path)
 {
+    m_last_sol_from_recall = false;
     SMPL_DEBUG_STREAM_NAMED(G_LOG, "State ID Path: " << idpath);
     if (idpath.empty()) {
         return true;
@@ -187,7 +188,7 @@ bool ManipLatticeEgraph::extractPath(
             ExperienceGraph::node_id cn =
                     std::distance(m_egraph_state_ids.begin(), cnit);
 
-            SMPL_INFO("Check for shortcut from %d to %d (egraph %zu -> %zu)!", prev_id, curr_id, pn, cn);
+            SMPL_DEBUG("Check for shortcut from %d to %d (egraph %zu -> %zu)!", prev_id, curr_id, pn, cn);
 
             std::vector<ExperienceGraph::node_id> node_path;
             found = findShortestExperienceGraphPath(pn, cn, node_path);
@@ -198,6 +199,7 @@ bool ManipLatticeEgraph::extractPath(
                     assert(entry);
                     opath.push_back(entry->state);
                 }
+                m_last_sol_from_recall = true;
             }
         }
         if (found) {
@@ -469,7 +471,7 @@ bool ManipLatticeEgraph::findShortestExperienceGraphPath(
         min->closed = true;
 
         if (min == &search_nodes[goal_node]) {
-            SMPL_DEBUG("Found shortest experience graph path");
+            SMPL_INFO("Found shortest experience graph path");
             ExperienceGraphSearchNode* ps = nullptr;
             for (ExperienceGraphSearchNode* s = &search_nodes[goal_node];
                 s; s = s->bp)
@@ -555,6 +557,11 @@ bool ManipLatticeEgraph::parseExperienceGraphFile(
 
     SMPL_DEBUG("Read %zu states from experience graph file", egraph_states.size());
     return true;
+}
+
+bool ManipLatticeEgraph::prevSolFromRecall()
+{
+    return m_last_sol_from_recall;
 }
 
 /// An attempt to construct the discrete experience graph by discretizing all

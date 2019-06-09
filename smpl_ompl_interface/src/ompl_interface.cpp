@@ -969,6 +969,14 @@ auto PlannerImpl::solve(
         space->saveExperience(eGraphsDir, path);
     }
 
+    bool sol_from_recall = false;
+    if (b_useEGraphs) {
+        ManipLatticeEgraph* egraphLattice = dynamic_cast<ManipLatticeEgraph*>(this->space.get());
+        if (egraphLattice){
+            sol_from_recall = egraphLattice->prevSolFromRecall();
+        }
+    }
+
     auto* p_path = new ompl::geometric::PathGeometric(planner->getSpaceInformation());
 
     for (auto& p : path) {
@@ -976,8 +984,9 @@ auto PlannerImpl::solve(
         p_path->append(ompl_state);
     }
 
+    std::string plannerStatus = sol_from_recall ? "SMPL solution from Recall" : "SMPL solution from Scratch";
     auto ompl_path = ompl::base::PathPtr(p_path);
-    planner->getProblemDefinition()->addSolutionPath(ompl_path);
+    planner->getProblemDefinition()->addSolutionPath(ompl_path, false, -1, plannerStatus);
     return ompl::base::PlannerStatus(ompl::base::PlannerStatus::EXACT_SOLUTION);
 }
 
