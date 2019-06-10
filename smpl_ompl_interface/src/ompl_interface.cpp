@@ -533,6 +533,14 @@ PlannerImpl::PlannerImpl(
         mprim[i] = res; // in meters
         this->actions->addMotionPrim(mprim, false);
     }
+    std::vector<double> mprimDiag1(this->model.getPlanningJoints().size(), 0.0);
+    mprimDiag1[0] = res;
+    mprimDiag1[1] = res;
+    this->actions->addMotionPrim(mprimDiag1, false);
+    std::vector<double> mprimDiag2(this->model.getPlanningJoints().size(), 0.0);
+    mprimDiag2[0] = -res;
+    mprimDiag2[1] = res;
+    this->actions->addMotionPrim(mprimDiag2, false);
 
     // Add motion primitives for the SO2 space. 360 degree rotation with step size of resolution
     int numRotations = int(pi / angularRes); // not 2.0*pi since the addMotionPrim automatically adds the converse primitive
