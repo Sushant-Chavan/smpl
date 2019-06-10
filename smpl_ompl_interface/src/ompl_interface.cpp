@@ -746,7 +746,7 @@ PlannerImpl::PlannerImpl(
     {
         auto set = [&](bool val) { this->search->setBoundExpansions(val); };
         auto get = [&]() { return this->search->boundExpansions(); };
-        planner->params().declareParam<bool>("bound_expansions", set, get);
+        planner->params().declareParam<double>("bound_expansions", set, get);
     }
 
     {
