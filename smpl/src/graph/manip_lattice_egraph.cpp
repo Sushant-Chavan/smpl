@@ -54,6 +54,7 @@ bool ManipLatticeEgraph::extractPath(
     const std::vector<int>& idpath,
     std::vector<RobotState>& path)
 {
+    m_last_sol_from_recall = false;
     SMPL_DEBUG_STREAM_NAMED(G_LOG, "State ID Path: " << idpath);
     if (idpath.empty()) {
         return true;
@@ -187,7 +188,7 @@ bool ManipLatticeEgraph::extractPath(
             ExperienceGraph::node_id cn =
                     std::distance(m_egraph_state_ids.begin(), cnit);
 
-            SMPL_INFO("Check for shortcut from %d to %d (egraph %zu -> %zu)!", prev_id, curr_id, pn, cn);
+            SMPL_DEBUG("Check for shortcut from %d to %d (egraph %zu -> %zu)!", prev_id, curr_id, pn, cn);
 
             std::vector<ExperienceGraph::node_id> node_path;
             found = findShortestExperienceGraphPath(pn, cn, node_path);
@@ -198,6 +199,7 @@ bool ManipLatticeEgraph::extractPath(
                     assert(entry);
                     opath.push_back(entry->state);
                 }
+                m_last_sol_from_recall = true;
             }
         }
         if (found) {
@@ -305,24 +307,36 @@ bool ManipLatticeEgraph::loadExperienceGraph(const std::string& path)
 
 bool ManipLatticeEgraph::saveExperience(const std::string& filepath, const Action& experience)
 {
+    RobotCoord start(experience.front().size());
+    RobotCoord end(experience.front().size());
+    stateToCoord(experience.front(), start);
+    stateToCoord(experience.back(), end);
+
     int nFiles = std::count_if(
         boost::filesystem::directory_iterator(filepath),
         boost::filesystem::directory_iterator(),
         static_cast<bool(*)(const boost::filesystem::path&)>(boost::filesystem::is_regular_file) );
 
     std::stringstream filename;
-    filename << "/" << (nFiles+1) << ".csv";
-    std::ofstream out(filepath + filename.str());
-    for (auto& state : experience) {
-        for (int i = 0; i < state.size(); i++)
-        {
-            if (i > 0)
-                out << ',';
-            out << state[i];
+    filename << "/" << start << "_to_" << end << ".csv";
+
+    std::string fullFilePath = filepath + filename.str();
+    if (!boost::filesystem::is_regular_file(fullFilePath)) {
+        std::ofstream out(fullFilePath);
+        for (auto& state : experience) {
+            for (int i = 0; i < state.size(); i++)
+            {
+                if (i > 0)
+                    out << ',';
+                out << state[i];
+            }
+            out << '\n';
         }
-        out << '\n';
+        out.close();
     }
-    out.close();
+    else {
+        SMPL_INFO("Experience (%s) already exists. Not overwriting the file!", filename.str().c_str());
+    }
 }
 
 void ManipLatticeEgraph::getExperienceGraphNodes(
@@ -457,7 +471,7 @@ bool ManipLatticeEgraph::findShortestExperienceGraphPath(
         min->closed = true;
 
         if (min == &search_nodes[goal_node]) {
-            SMPL_DEBUG("Found shortest experience graph path");
+            SMPL_INFO("Found shortest experience graph path");
             ExperienceGraphSearchNode* ps = nullptr;
             for (ExperienceGraphSearchNode* s = &search_nodes[goal_node];
                 s; s = s->bp)
@@ -543,6 +557,11 @@ bool ManipLatticeEgraph::parseExperienceGraphFile(
 
     SMPL_DEBUG("Read %zu states from experience graph file", egraph_states.size());
     return true;
+}
+
+bool ManipLatticeEgraph::prevSolFromRecall()
+{
+    return m_last_sol_from_recall;
 }
 
 /// An attempt to construct the discrete experience graph by discretizing all

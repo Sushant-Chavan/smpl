@@ -47,15 +47,11 @@ public:
     ARAStarEGraph(RobotPlanningSpace* pspace, RobotHeuristic* heur);
     ~ARAStarEGraph();
 
-    void set_initialsolution_eps(double initialsolution_eps);
-
 protected:
     void expand(SearchState* s) override;
 
-
     ExperienceGraphExtension* m_ege;
     ExperienceGraphHeuristicExtension* m_egh;
-    double m_eps;
 };
 
 } // namespace smpl

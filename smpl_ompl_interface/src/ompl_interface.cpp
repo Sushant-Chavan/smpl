@@ -32,7 +32,6 @@
 #include <smpl/search/arastar.h>
 #include <smpl/stl/memory.h>
 
-#define USE_EGRAPH_PLANNER
 // #define SAVE_EXPERIENCES
 
 namespace smpl {
@@ -60,8 +59,6 @@ CallOnDestruct<Callable> MakeCallOnDestruct(Callable c) {
 // create an obscurely named CallOnDestruct with an anonymous lambda that
 // executes the given statement sequence
 #define DEFER(fun) auto MAKE_LINE_IDENT(tmp_call_on_destruct_) = ::smpl::detail::MakeCallOnDestruct([&](){ fun; })
-
-std::string egraph_path = "/home/suvich15/Sushant/MAS/RnD_Resources/repositories/coordination_oru/generated/experienceDBs/BRSU_Floor0/10_TrainingExperiences/UsingHotspots/Holonomic/EGraph";
 
 ///////////////////////////////
 // RobotModel Implementation //
@@ -257,33 +254,6 @@ enum struct ConcreteSpaceType
     MORSE_STATE_SPACE_TYPE,
 };
 
-#ifdef USE_EGRAPH_PLANNER
-auto MakeJointDistEGraphHeuristic(
-    RobotPlanningSpace* space)
-    -> std::unique_ptr<RobotHeuristic>
-{
-    struct JointDistEGraphHeuristic : public GenericEgraphHeuristic {
-        JointDistHeuristic jd;
-    };
-
-    auto h = make_unique<JointDistEGraphHeuristic>();
-    if (!h->jd.init(space))
-    {
-        return nullptr;
-    }
-
-    if (!h->init(space, &h->jd))
-    {
-        return nullptr;
-    }
-
-    double egw = 1.0;
-    // params.param("egraph_epsilon", egw, 1.0);
-    h->setWeightEGraph(egw);
-    return std::move(h);
-};
-#endif
-
 struct PlannerImpl
 {
     // world model interface
@@ -292,29 +262,32 @@ struct PlannerImpl
 
     // graph
     std::string mprim_filename;
-    smpl::ManipLatticeActionSpace actions;
+    std::unique_ptr<smpl::ManipLattice> space;
+    std::unique_ptr<smpl::ManipLatticeActionSpace> actions;
 
     // heuristic
     std::unique_ptr<smpl::RobotHeuristic> heuristic;
 
     // search
-    #ifdef USE_EGRAPH_PLANNER
-        std::unique_ptr<smpl::ARAStarEGraph> search;
-        smpl::ManipLatticeEgraph space;
-    #else
-        std::unique_ptr<smpl::ARAStar> search;
-        smpl::ManipLatticeEgraph space;
-    #endif
+    std::unique_ptr<smpl::ARAStar> search;
 
     OccupancyGrid* grid = NULL;
 
     bool initialized = false;
 
+    bool b_useEGraphs = true;
+
+    bool b_saveSolution = false;
+
+    std::string eGraphsDir;
+
     PlannerImpl(
         OMPLPlanner* planner,
         ompl::base::SpaceInformation* si,
         const std::string& planner_id,
-        OccupancyGrid* grid);
+        OccupancyGrid* grid,
+        bool useEGraphs,
+        const std::string& eGraphsDir);
 
     void setProblemDefinition(OMPLPlanner* planner, const ompl::base::ProblemDefinitionPtr& pdef);
 
@@ -328,6 +301,14 @@ struct PlannerImpl
     void setup(OMPLPlanner* planner);
 
     void getPlannerData(const OMPLPlanner* planner, ompl::base::PlannerData& data) const;
+
+    bool useEGraphs();
+
+    void saveSolution(bool val);
+    bool saveSolution();
+
+    auto makeJointDistEGraphHeuristic(RobotPlanningSpace* space)
+        -> std::unique_ptr<RobotHeuristic>;
 };
 
 static
@@ -410,11 +391,15 @@ PlannerImpl::PlannerImpl(
     OMPLPlanner* planner,
     ompl::base::SpaceInformation* si,
     const std::string& planner_id,
-    OccupancyGrid* grid)
+    OccupancyGrid* grid,
+    bool useEgraph,
+    const std::string& eGraphsDir)
 {
     SMPL_DEBUG("Construct Planner");
 
     this->grid = grid;
+    this->b_useEGraphs = useEgraph;
+    this->eGraphsDir = eGraphsDir;
 
     planner->specs_.approximateSolutions = false;
     planner->specs_.canReportIntermediateSolutions = true; //false;
@@ -500,33 +485,44 @@ PlannerImpl::PlannerImpl(
     // Initialize Manip Lattice //
     //////////////////////////////
 
+    if (b_useEGraphs) {
+        this->space = make_unique<ManipLatticeEgraph>();
+    }
+    else {
+        this->space = make_unique<ManipLattice>();
+    }
+    this->actions = make_unique<ManipLatticeActionSpace>();
+
     auto res = 0.2;
     auto pi = 3.142;
-    auto angularRes = pi/2.0;
+    auto angularRes = pi/4.0;
     int lastJointIdx = this->model.getPlanningJoints().size() - 1;
 
     std::vector<double> resolutions;
     resolutions.resize(this->model.getPlanningJoints().size(), res);
     resolutions[lastJointIdx] = angularRes;
-    if (!this->space.init(
+    if (!this->space->init(
             &this->model,
             &this->checker,
             resolutions,
-            &this->actions))
+            this->actions.get()))
     {
         SMPL_WARN("Failed to initialize manip lattice");
         return;
     }
 
-    #ifdef USE_EGRAPH_PLANNER
-        this->space.loadExperienceGraph(egraph_path);
-    #endif
-
-    if (grid != NULL) {
-        this->space.setVisualizationFrameId(grid->getReferenceFrame());
+    if (b_useEGraphs) {
+        ManipLatticeEgraph* egraphLattice = dynamic_cast<ManipLatticeEgraph*>(this->space.get());
+        if (egraphLattice){
+            egraphLattice->loadExperienceGraph(this->eGraphsDir);
+        }
     }
 
-    if (!this->actions.init(&this->space)) {
+    if (grid != NULL) {
+        this->space->setVisualizationFrameId(grid->getReferenceFrame());
+    }
+
+    if (!this->actions->init(this->space.get())) {
         SMPL_WARN("Failed to initialize Manip Lattice Action Space");
         return;
     }
@@ -534,31 +530,39 @@ PlannerImpl::PlannerImpl(
     // Add motion primitives for the real vector space
     for (int i = 0; i < (int)this->model.getPlanningJoints().size()-1; ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
-        mprim[i] = res;
-        this->actions.addMotionPrim(mprim, false);
+        mprim[i] = res; // in meters
+        this->actions->addMotionPrim(mprim, false);
     }
+    std::vector<double> mprimDiag1(this->model.getPlanningJoints().size(), 0.0);
+    mprimDiag1[0] = res;
+    mprimDiag1[1] = res;
+    this->actions->addMotionPrim(mprimDiag1, false);
+    std::vector<double> mprimDiag2(this->model.getPlanningJoints().size(), 0.0);
+    mprimDiag2[0] = -res;
+    mprimDiag2[1] = res;
+    this->actions->addMotionPrim(mprimDiag2, false);
 
     // Add motion primitives for the SO2 space. 360 degree rotation with step size of resolution
     int numRotations = int(pi / angularRes); // not 2.0*pi since the addMotionPrim automatically adds the converse primitive
     for (int i = 0; i < numRotations; ++i) {
         std::vector<double> mprim(this->model.getPlanningJoints().size(), 0.0);
         mprim[lastJointIdx] = res * (i+1);
-        this->actions.addMotionPrim(mprim, false);
+        this->actions->addMotionPrim(mprim, false);
     }
 
 #if 0
     SMPL_DEBUG("Action Set:");
-    for (auto ait = this->actions.begin(); ait != this->actions.end(); ++ait) {
+    for (auto ait = this->actions->begin(); ait != this->actions->end(); ++ait) {
         SMPL_DEBUG("  type: %s", to_cstring(ait->type));
         if (ait->type == smpl::MotionPrimitive::SNAP_TO_RPY) {
-            SMPL_DEBUG("    enabled: %s", this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_RPY) ? "true" : "false");
-            SMPL_DEBUG("    thresh: %0.3f", this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY));
+            SMPL_DEBUG("    enabled: %s", this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_RPY) ? "true" : "false");
+            SMPL_DEBUG("    thresh: %0.3f", this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY));
         } else if (ait->type == smpl::MotionPrimitive::SNAP_TO_XYZ) {
-            SMPL_DEBUG("    enabled: %s", this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ) ? "true" : "false");
-            SMPL_DEBUG("    thresh: %0.3f", this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ));
+            SMPL_DEBUG("    enabled: %s", this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ) ? "true" : "false");
+            SMPL_DEBUG("    thresh: %0.3f", this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ));
         } else if (ait->type == smpl::MotionPrimitive::SNAP_TO_XYZ_RPY) {
-            SMPL_DEBUG("    enabled: %s", this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY) ? "true" : "false");
-            SMPL_DEBUG("    thresh: %0.3f", this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY));
+            SMPL_DEBUG("    enabled: %s", this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY) ? "true" : "false");
+            SMPL_DEBUG("    thresh: %0.3f", this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY));
         } else if (ait->type == smpl::MotionPrimitive::LONG_DISTANCE ||
             ait->type == smpl::MotionPrimitive::SHORT_DISTANCE)
         {
@@ -571,40 +575,41 @@ PlannerImpl::PlannerImpl(
     // Initialize Heuristic //
     //////////////////////////
 
-#ifdef USE_EGRAPH_PLANNER
-    this->heuristic = MakeJointDistEGraphHeuristic(&this->space);
-#else
-    if (planner_id.empty()) {
-        this->heuristic = make_unique<JointDistHeuristic>();
-        if (!this->heuristic->init(&this->space)) {
-            return;
-        }
-    } else if (planner_id == "arastar.joint_dist.manip") {
-        this->heuristic = make_unique<JointDistHeuristic>();
-        if (!this->heuristic->init(&this->space)) {
-            return;
-        }
-    } else if (planner_id == "arastar.bfs.manip") {
-        auto bfs_heuristic = make_unique<BfsHeuristic>();
-        if (!bfs_heuristic->init(&this->space, grid)) {
-            return;
-        }
-        this->heuristic = std::move(bfs_heuristic);
-    } else {
-        SMPL_ERROR("Unrecognized planner name");
-        return;
+    if (b_useEGraphs) {
+        this->heuristic = makeJointDistEGraphHeuristic(this->space.get());
     }
-#endif
+    else {
+        if (planner_id.empty()) {
+            this->heuristic = make_unique<JointDistHeuristic>();
+            if (!this->heuristic->init(this->space.get())) {
+                return;
+            }
+        } else if (planner_id == "arastar.joint_dist.manip") {
+            this->heuristic = make_unique<JointDistHeuristic>();
+            if (!this->heuristic->init(this->space.get())) {
+                return;
+            }
+        } else if (planner_id == "arastar.bfs.manip") {
+            auto bfs_heuristic = make_unique<BfsHeuristic>();
+            if (!bfs_heuristic->init(this->space.get(), grid)) {
+                return;
+            }
+            this->heuristic = std::move(bfs_heuristic);
+        } else {
+            SMPL_ERROR("Unrecognized planner name");
+            return;
+        }
+    }
 
     ///////////////////////////
     // Initialize the Search //
     ///////////////////////////
-
-    #ifdef USE_EGRAPH_PLANNER
-    this->search = make_unique<ARAStarEGraph>(&this->space, this->heuristic.get());
-    #else
-    this->search = make_unique<ARAStar>(&this->space, this->heuristic.get());
-    #endif
+    if (b_useEGraphs) {
+        this->search = make_unique<ARAStarEGraph>(this->space.get(), this->heuristic.get());
+    }
+    else {
+        this->search = make_unique<ARAStar>(this->space.get(), this->heuristic.get());
+    }
 
     ////////////////////////
     // Declare Parameters //
@@ -614,14 +619,14 @@ PlannerImpl::PlannerImpl(
     for (auto i = 0; i < this->model.getPlanningJoints().size(); ++i) {
         auto& vname = this->model.getPlanningJoints()[i];
         auto set = [this](double discretization) { /* TODO */ };
-        auto get = [this, i]() { return this->space.resolutions()[i]; };
+        auto get = [this, i]() { return this->space->resolutions()[i]; };
         planner->params().declareParam<double>("discretization_" + vname, set, get);
     }
 
     // declare action space parameters...
     {
         auto set = [&](const std::string& val) {
-            if (this->actions.load(val)) {
+            if (this->actions->load(val)) {
                 this->mprim_filename = val;
             }
         };
@@ -630,62 +635,62 @@ PlannerImpl::PlannerImpl(
     }
 
     {
-        auto set = [&](bool val) { this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ, val); };
-        auto get = [&]() { return this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ); };
+        auto set = [&](bool val) { this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ, val); };
+        auto get = [&]() { return this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ); };
         planner->params().declareParam<double>("use_xyz_snap_mprim", set, get);
     }
 
     {
-        auto set = [&](bool val) { this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_RPY, val); };
-        auto get = [&]() { return this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_RPY); };
+        auto set = [&](bool val) { this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_RPY, val); };
+        auto get = [&]() { return this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_RPY); };
         planner->params().declareParam<double>("use_rpy_snap_mprim", set, get);
     }
 
     {
-        auto set = [&](bool val) { this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY, val); };
-        auto get = [&]() { return this->actions.useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY); };
+        auto set = [&](bool val) { this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY, val); };
+        auto get = [&]() { return this->actions->useAmp(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY); };
         planner->params().declareParam<double>("use_xyzrpy_snap_mprim", set, get);
     }
 
     {
-        auto set = [&](bool val) { this->actions.useAmp(smpl::MotionPrimitive::SHORT_DISTANCE, val); };
-        auto get = [&]() { return this->actions.useAmp(smpl::MotionPrimitive::SHORT_DISTANCE); };
+        auto set = [&](bool val) { this->actions->useAmp(smpl::MotionPrimitive::SHORT_DISTANCE, val); };
+        auto get = [&]() { return this->actions->useAmp(smpl::MotionPrimitive::SHORT_DISTANCE); };
         planner->params().declareParam<double>("use_short_dist_mprims", set, get);
     }
 
     {
-        auto set = [&](double val) { this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ, val); };
-        auto get = [&]() { return this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ); };
+        auto set = [&](double val) { this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ, val); };
+        auto get = [&]() { return this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ); };
         planner->params().declareParam<double>("xyz_snap_dist_thresh", set, get);
     }
 
     {
-        auto set = [&](double val) { this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY, val); };
-        auto get = [&]() { return this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY); };
+        auto set = [&](double val) { this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY, val); };
+        auto get = [&]() { return this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY); };
         planner->params().declareParam<double>("rpy_snap_dist_thresh", set, get);
     }
 
     {
-        auto set = [&](double val) { this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY, val); };
-        auto get = [&]() { return this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY); };
+        auto set = [&](double val) { this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY, val); };
+        auto get = [&]() { return this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_RPY); };
         planner->params().declareParam<double>("rpy_snap_dist_thresh", set, get);
     }
 
     {
-        auto set = [&](double val) { this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY, val); };
-        auto get = [&]() { return this->actions.ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY); };
+        auto set = [&](double val) { this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY, val); };
+        auto get = [&]() { return this->actions->ampThresh(smpl::MotionPrimitive::SNAP_TO_XYZ_RPY); };
         planner->params().declareParam<double>("xyzrpy_snap_dist_thresh", set, get);
     }
 
     {
-        auto set = [&](double val) { this->actions.ampThresh(smpl::MotionPrimitive::SHORT_DISTANCE, val); };
-        auto get = [&]() { return this->actions.ampThresh(smpl::MotionPrimitive::SHORT_DISTANCE); };
+        auto set = [&](double val) { this->actions->ampThresh(smpl::MotionPrimitive::SHORT_DISTANCE, val); };
+        auto get = [&]() { return this->actions->ampThresh(smpl::MotionPrimitive::SHORT_DISTANCE); };
         planner->params().declareParam<double>("short_dist_mprims_thresh", set, get);
     }
 
     {
-        auto set = [&](bool val) { this->actions.useMultipleIkSolutions(val); };
-        auto get = [&]() { return this->actions.useMultipleIkSolutions(); };
+        auto set = [&](bool val) { this->actions->useMultipleIkSolutions(val); };
+        auto get = [&]() { return this->actions->useMultipleIkSolutions(); };
         planner->params().declareParam<double>("short_dist_mprims_thresh", set, get);
     }
 
@@ -749,7 +754,7 @@ PlannerImpl::PlannerImpl(
     {
         auto set = [&](bool val) { this->search->setBoundExpansions(val); };
         auto get = [&]() { return this->search->boundExpansions(); };
-        planner->params().declareParam<bool>("bound_expansions", set, get);
+        planner->params().declareParam<double>("bound_expansions", set, get);
     }
 
     {
@@ -817,7 +822,7 @@ auto PlannerImpl::solve(
         auto* start = pdef->getStartState(0);
         auto start_state = MakeStateSMPL(ompl_space, start);
         SMPL_DEBUG_STREAM("start state = " << start_state);
-        if (!this->space.setStart(start_state)) {
+        if (!this->space->setStart(start_state)) {
             SMPL_WARN("Failed to set start state");
             return ompl::base::PlannerStatus(ompl::base::PlannerStatus::INVALID_START);
         }
@@ -881,10 +886,9 @@ auto PlannerImpl::solve(
             // UGH
             goal_condition.angle_tolerances.resize(
                     goal_condition.angles.size(),
-                    this->space.resolutions().front());
+                    this->space->resolutions().front());
             // Set the tolerance for the theta to be very high so that we do not consider it for cheching goal satisfiability
-            int last  = goal_condition.angle_tolerances.size() - 1;
-            goal_condition.angle_tolerances[last] = this->space.resolutions()[last];
+            goal_condition.angle_tolerances.back() = this->space->resolutions().back();
             break;
         }
         default:
@@ -892,7 +896,7 @@ auto PlannerImpl::solve(
             break;
         }
 
-        if (!space.setGoal(goal_condition)) {
+        if (!space->setGoal(goal_condition)) {
             SMPL_WARN("Failed to set goal");
             return ompl::base::PlannerStatus(ompl::base::PlannerStatus::INVALID_GOAL);
         }
@@ -915,12 +919,12 @@ auto PlannerImpl::solve(
     //this->search->force_planning_from_scratch();
 
 
-    auto start_id = space.getStartStateID();
-    auto goal_id = space.getGoalStateID();
+    auto start_id = space->getStartStateID();
+    auto goal_id = space->getGoalStateID();
     this->search->set_start(start_id);
     this->search->set_goal(goal_id);
 
-    // this->space.PrintState(goal_id, true);
+    // this->space->PrintState(goal_id, true);
     std::vector<int> solution;
     int cost;
 
@@ -937,9 +941,9 @@ auto PlannerImpl::solve(
         return ompl::base::PlannerStatus(ompl::base::PlannerStatus::TIMEOUT);
     }
 
-    SMPL_INFO("Expands: %d", this->search->get_n_expands());
+    SMPL_INFO("Expands (Total): %d", this->search->get_n_expands());
     SMPL_INFO("Expands (Init): %d", this->search->get_n_expands_init_solution());
-    SMPL_INFO("Epsilon: %f", this->search->get_final_epsilon());
+    SMPL_INFO("Epsilon (Solution): %f", this->search->get_solution_eps());
     SMPL_INFO("Epsilon (Init): %f", this->search->get_initial_eps());
 
 #if 0
@@ -965,13 +969,21 @@ auto PlannerImpl::solve(
     //////////////////////////////////////////////////////////
 
     std::vector<smpl::RobotState> path;
-    if (!space.extractPath(solution, path)) {
+    if (!space->extractPath(solution, path)) {
         return ompl::base::PlannerStatus::CRASH;
     }
 
-#ifdef SAVE_EXPERIENCES
-    space.saveExperience(egraph_path, path);
-#endif
+    if (b_saveSolution) {
+        space->saveExperience(eGraphsDir, path);
+    }
+
+    bool sol_from_recall = false;
+    if (b_useEGraphs) {
+        ManipLatticeEgraph* egraphLattice = dynamic_cast<ManipLatticeEgraph*>(this->space.get());
+        if (egraphLattice){
+            sol_from_recall = egraphLattice->prevSolFromRecall();
+        }
+    }
 
     auto* p_path = new ompl::geometric::PathGeometric(planner->getSpaceInformation());
 
@@ -980,8 +992,9 @@ auto PlannerImpl::solve(
         p_path->append(ompl_state);
     }
 
+    std::string plannerStatus = sol_from_recall ? "SMPL solution from Recall" : "SMPL solution from Scratch";
     auto ompl_path = ompl::base::PathPtr(p_path);
-    planner->getProblemDefinition()->addSolutionPath(ompl_path);
+    planner->getProblemDefinition()->addSolutionPath(ompl_path, false, -1, plannerStatus);
     return ompl::base::PlannerStatus(ompl::base::PlannerStatus::EXACT_SOLUTION);
 }
 
@@ -1022,6 +1035,43 @@ void PlannerImpl::getPlannerData(
     planner->ompl::base::Planner::getPlannerData(data);
 }
 
+auto PlannerImpl::makeJointDistEGraphHeuristic(
+    RobotPlanningSpace* space)
+    -> std::unique_ptr<RobotHeuristic>
+{
+    struct JointDistEGraphHeuristic : public GenericEgraphHeuristic {
+        JointDistHeuristic jd;
+    };
+
+    auto h = make_unique<JointDistEGraphHeuristic>();
+    if (!h->jd.init(space))
+    {
+        return nullptr;
+    }
+
+    if (!h->init(space, &h->jd))
+    {
+        return nullptr;
+    }
+
+    double egw = 1.0;
+    // params.param("egraph_epsilon", egw, 1.0);
+    h->setWeightEGraph(egw);
+    return std::move(h);
+};
+
+bool PlannerImpl::useEGraphs() {
+    return b_useEGraphs;
+}
+
+void PlannerImpl::saveSolution(bool val) {
+    b_saveSolution = val;
+}
+
+bool PlannerImpl::saveSolution() {
+    return b_saveSolution;
+}
+
 void SetStateVisualizer(PlannerImpl* planner, const OMPLPlanner::VisualizerFun& fun)
 {
     planner->checker.visualizer = fun;
@@ -1056,13 +1106,17 @@ bool PoseGoal::isSatisfied(const ompl::base::State* state) const
 
 OMPLPlanner::OMPLPlanner(
     const ompl::base::SpaceInformationPtr& si,
+    bool useEGraphs,
+    const std::string& eGraphsDir,
     const std::string& planner_id,
-    OccupancyGrid* grid)
+    OccupancyGrid* grid,
+    bool saveSolutionPath)
 :
     Planner(si, "smpl_planner"),
     m_impl(make_unique<smpl::detail::PlannerImpl>(
-            this, si.get(), planner_id, grid))
+            this, si.get(), planner_id, grid, useEGraphs, eGraphsDir))
 {
+    m_impl->saveSolution(saveSolutionPath);
 }
 
 OMPLPlanner::~OMPLPlanner()

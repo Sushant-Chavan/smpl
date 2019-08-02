@@ -63,24 +63,36 @@ namespace smpl {
 
 bool ManipLattice::saveExperience(const std::string& filepath, const Action& experience)
 {
+    RobotCoord start(experience.front().size());
+    RobotCoord end(experience.front().size());
+    stateToCoord(experience.front(), start);
+    stateToCoord(experience.back(), end);
+
     int nFiles = std::count_if(
         boost::filesystem::directory_iterator(filepath),
         boost::filesystem::directory_iterator(),
         static_cast<bool(*)(const boost::filesystem::path&)>(boost::filesystem::is_regular_file) );
 
     std::stringstream filename;
-    filename << "/" << (nFiles+1) << ".csv";
-    std::ofstream out(filepath + filename.str());
-    for (auto& state : experience) {
-        for (int i = 0; i < state.size(); i++)
-        {
-            if (i > 0)
-                out << ',';
-            out << state[i];
+    filename << "/" << start << "_to_" << end << ".csv";
+
+    std::string fullFilePath = filepath + filename.str();
+    if (!boost::filesystem::is_regular_file(fullFilePath)) {
+        std::ofstream out(fullFilePath);
+        for (auto& state : experience) {
+            for (int i = 0; i < state.size(); i++)
+            {
+                if (i > 0)
+                    out << ',';
+                out << state[i];
+            }
+            out << '\n';
         }
-        out << '\n';
+        out.close();
     }
-    out.close();
+    else {
+        SMPL_INFO("Experience (%s) already exists. Not overwriting the file!", filename.str().c_str());
+    }
 }
 
 ManipLattice::~ManipLattice()
@@ -128,7 +140,7 @@ bool ManipLattice::init(
         m_continuous[jidx] = _robot->isContinuous(jidx);
         m_bounded[jidx] = _robot->hasPosLimit(jidx);
 
-        SMPL_DEBUG_NAMED(G_LOG, "variable %d: { min: %f, max: %f, continuous: %s, bounded: %s }",
+        SMPL_INFO_NAMED(G_LOG, "variable %d: { min: %f, max: %f, continuous: %s, bounded: %s }",
             jidx,
             m_min_limits[jidx],
             m_max_limits[jidx],
@@ -155,8 +167,8 @@ bool ManipLattice::init(
         }
     }
 
-    SMPL_DEBUG_STREAM_NAMED(G_LOG, "  coord vals: " << discretization);
-    SMPL_DEBUG_STREAM_NAMED(G_LOG, "  coord deltas: " << deltas);
+    SMPL_INFO_STREAM_NAMED(G_LOG, "  coord vals: " << discretization);
+    SMPL_INFO_STREAM_NAMED(G_LOG, "  coord deltas: " << deltas);
 
     m_coord_vals = std::move(discretization);
     m_coord_deltas = std::move(deltas);

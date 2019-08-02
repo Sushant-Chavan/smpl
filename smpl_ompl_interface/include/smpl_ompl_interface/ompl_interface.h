@@ -47,8 +47,11 @@ struct OMPLPlanner : public ompl::base::Planner
     /// \param planner_id
     OMPLPlanner(
         const ompl::base::SpaceInformationPtr& si,
+        bool useEgraphs,
+        const std::string& eGraphsDir = std::string(),
         const std::string& planner_id = std::string(),
-        OccupancyGrid* grid = NULL);
+        OccupancyGrid* grid = NULL,
+        bool saveSolutionPath = false);
 
     ~OMPLPlanner();
 
@@ -92,4 +95,3 @@ auto MakeStateOMPL(
 } // namespace smpl
 
 #endif
-

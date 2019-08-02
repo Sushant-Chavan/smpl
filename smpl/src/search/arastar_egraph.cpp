@@ -50,7 +50,6 @@ ARAStarEGraph::ARAStarEGraph(
     RobotPlanningSpace* space,
     RobotHeuristic* heur)
 : ARAStar(space, heur)
-, m_eps(5.0)
 {
     m_ege = space->getExtension<ExperienceGraphExtension>();
     if (!m_ege) {
@@ -65,17 +64,6 @@ ARAStarEGraph::ARAStarEGraph(
 
 ARAStarEGraph::~ARAStarEGraph()
 {
-    // for (SearchState* s : m_states) {
-    //     if (s != NULL) {
-    //         delete s;
-    //     }
-    // }
-}
-
-void ARAStarEGraph::set_initialsolution_eps(double initialsolution_eps)
-{
-    // TODO: update stuff
-    m_eps = initialsolution_eps;
 }
 
 // Expand a state, updating its successors and placing them into OPEN, CLOSED,
