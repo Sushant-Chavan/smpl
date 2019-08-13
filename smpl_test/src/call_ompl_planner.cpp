@@ -692,7 +692,7 @@ int main(int argc, char* argv[])
     // Finally construct/initialize the planner...
 
     auto* planner = new smpl::OMPLPlanner(
-            ss.getSpaceInformation(), "arastar.bfs.manip", &grid);
+            ss.getSpaceInformation(), false, "", "", NULL, false);
 
     // Read params from the parameter server...
     PlannerConfig planning_config;
